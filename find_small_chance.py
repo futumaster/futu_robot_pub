@@ -2,6 +2,8 @@
 import time,sys
 from futu import *
 import pickle
+import talib
+import datetime
 
 def get_socket_list(quote_ctx, market=Market.US):
     """
@@ -13,13 +15,13 @@ def get_socket_list(quote_ctx, market=Market.US):
     socket_list = []
     ##10亿市值以下
     simple_filter = SimpleFilter()
-    simple_filter.filter_max = 1000000000
+    simple_filter.filter_max = 2000000000
     simple_filter.stock_field = StockField.MARKET_VAL
     simple_filter.is_no_filter = False
     simple_filter.sort = SortDir.ASCEND
     ##56周距离最高价格-20%
     price_filter = SimpleFilter()
-    price_filter.filter_max = -30
+    price_filter.filter_max = -10
     price_filter.stock_field = StockField.CUR_PRICE_TO_HIGHEST52_WEEKS_RATIO
     price_filter.is_no_filter = False
     ##亏损的烂货
@@ -27,12 +29,12 @@ def get_socket_list(quote_ctx, market=Market.US):
     ttm_filter.filter_max = 0
     ttm_filter.stock_field = StockField.PE_TTM
     ttm_filter.is_no_filter = False
-    ##仅200日有-10%的跌幅
-    #change_filter = AccumulateFilter()
-    #change_filter.is_no_filter = False
-    #change_filter.stock_field = StockField.CHANGE_RATE
-    #change_filter.filter_max = -10
-    #change_filter.days = 200
+    #仅200日有-10%的跌幅
+    change_filter = AccumulateFilter()
+    change_filter.is_no_filter = False
+    change_filter.stock_field = StockField.CHANGE_RATE
+    change_filter.filter_max = -20
+    change_filter.days = 90
     ##最近2天只有-2%～2%的涨跌幅
     #change2_filter = AccumulateFilter()
     #change2_filter.is_no_filter = False
@@ -44,12 +46,12 @@ def get_socket_list(quote_ctx, market=Market.US):
     change1_filter = AccumulateFilter()
     change1_filter.is_no_filter = False
     change1_filter.stock_field = StockField.AMPLITUDE
-    change1_filter.filter_max = 5
-    change1_filter.days = 5
+    change1_filter.filter_max = 8
+    change1_filter.days = 2
 
     start_page = 0
     while True:
-        ret, ls = quote_ctx.get_stock_filter(market, [simple_filter,price_filter,ttm_filter,change1_filter],begin=start_page, num=200)
+        ret, ls = quote_ctx.get_stock_filter(market, [simple_filter,price_filter,ttm_filter,change1_filter,change_filter],begin=start_page, num=200)
         if ret == RET_OK:
             last_page, all_count, ret_list = ls
             print(len(ret_list), all_count, ret_list)
@@ -116,8 +118,17 @@ for so in short_sell_sockets:
     all_code.append(code)
 if not quote_ctx:
     quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
-ret, data = quote_ctx.modify_user_security("ShortSale", ModifyUserSecurityOp.ADD, all_code)
-if ret == RET_OK:
-    print(data)  # 返回success
-else:
-    print('error:', data)
+if False:
+    ret, data = quote_ctx.modify_user_security("ShortSale", ModifyUserSecurityOp.ADD, all_code)
+    if ret == RET_OK:
+        print(data)  # 返回success
+    else:
+        print('error:', data)
+
+code = all_code[0]
+today = datetime.datetime.today()
+pre_day = (today - datetime.timedelta(days=90)
+           ).strftime('%Y-%m-%d')
+end_dt = today.strftime('%Y-%m-%d')
+ret_code, prices, page_req_key = quote_ctx.request_history_kline(code, start=pre_day, end=end_dt)
+print(prices)

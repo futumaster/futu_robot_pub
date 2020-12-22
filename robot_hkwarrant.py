@@ -181,15 +181,16 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
                 req1 = WarrantRequest()
                 req1.sort_field = SortField.VOLUME
                 if warrant_data_list["type"][0] == "BEAR":
-                    req1.type_list = WrtType.BULL
+                    req1.type_list = [WrtType.BULL, WrtType.CALL]
                 else:
-                    req1.type_list = WrtType.BEAR
+                    req1.type_list = [WrtType.BEAR, WrtType.PUT]
                 req1.street_max = 1
-                time_min = datetime.now() + timedelta(90)
+                time_min = datetime.now() + timedelta(120)
                 req1.maturity_timemin = time_min.strftime("%Y-%m-%d")
                 req1.status = "NORMAL"
                 ret, ls = quote_ctx.get_warrant(stock_owner=stock_num, req=req1)
                 warrant_data_list, last_page, all_count = ls
+                ##TODO：计算敏感度  正股最低买卖价位 x 对冲值delta(对冲值，仅认购认沽支持此字段) / 兌换比率（conversion_ratio） x 窝轮最低买卖价位
                 highscore_warrants = warrant_data_list.loc[
                     warrant_data_list["score"] > 70].to_dict("records")
                 print("获取高分的窝轮:", highscore_warrants)

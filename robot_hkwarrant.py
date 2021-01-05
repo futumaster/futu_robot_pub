@@ -151,6 +151,8 @@ def get_focus_stock(quote_ctx):
     focus = data['code'].values.tolist()
     return focus
 
+
+
 def get_subscribe_stock(quote_ctx, stocks,street_min=8):
     # 选出有街货大于x%，接近x%回收价的正股与伴生反向操作涡轮，回收价位，正股做key
     res = {}
@@ -218,6 +220,10 @@ class CurKlineCallback(CurKlineHandlerBase):
                                                         'turnover','recover_price','recover_price_radio',
                                                         'recover_stock','street_rate','street_vol','type','isbuy','buyprice','buysocket'])
         self.logger_writer.writeheader()
+        self.is_stop = False
+
+    def state(self):
+        return self.is_stop
 
     def on_recv_rsp(self, rsp_str):
         ret_code, data = super(CurKlineCallback,self).on_recv_rsp(rsp_str)
@@ -239,30 +245,36 @@ class CurKlineCallback(CurKlineHandlerBase):
             recover_price_radio = float(cur_kline["low"] - subscribe_warrant["recovery_price"]) / float(
                 subscribe_warrant["recovery_price"])
             #print("BULL 回收价相距", recover_price_radio, subscribe_warrant["recovery_price"], cur_kline["low"])
+        if recover_price_radio <= 0:
+            self.is_stop = True
         if recover_price_radio < 0.005:
             ##buy bull
             if subscribe_warrant["buy"]["stock"] in self.call_dict.keys():
                 self.call_dict[subscribe_warrant["buy"]["stock"]] = self.call_dict[subscribe_warrant["buy"]["stock"]] + 1
                 if self.call_dict[subscribe_warrant["buy"]["stock"]] < 3:
-                    print("********* 购买:", recover_price_radio, subscribe_warrant["buy"])
-                    send_weixin("购买:" + subscribe_warrant["buy"]["stock"],
-                                "距离回收价: %f" % (recover_price_radio * 100))
+                    log = "********* 距离:" + str(float(recover_price_radio*100)) + "回收价:" + str(subscribe_warrant["recovery_price"]) + "购买:" + subscribe_warrant["buy"]['stock'] +"," + subscribe_warrant["buy"]['name']
+                    print(log)
+                    send_weixin(log)
             else:
                 ret, ls = self.quote_ctx.get_market_snapshot([subscribe_warrant["buy"]["stock"], ])
-                self.logger_writer.writerow({'stock':cur_code,
-                                             'open':cur_kline['open'],
-                                             'close':cur_kline['close'],
-                                             'high':cur_kline['high'],
-                                             'low':cur_kline['low'],
-                                             'volume':cur_kline['volume'],
-                                             'turnover':cur_kline['turnover'],
-                                             'recover_price':subscribe_warrant["recovery_price"],
-                                             'recover_price_radio':recover_price_radio,
-                                            'recover_stock':subscribe_warrant['stock'],
-                                            'street_rate':subscribe_warrant['street_rate'],'street_vol':subscribe_warrant['street_vol'],
-                                            'type':subscribe_warrant["type"],'isbuy':'true','buyprice': ls.to_dict("records")[0]['last_price'],'buysocket':subscribe_warrant["buy"]["stock"]})
-                send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%(recover_price_radio*100))
-                self.call_dict[subscribe_warrant["buy"]["stock"]] = 1
+                print(ret)
+                if ret == 0:
+                    self.logger_writer.writerow({'stock':cur_code,
+                                                 'open':cur_kline['open'],
+                                                 'close':cur_kline['close'],
+                                                 'high':cur_kline['high'],
+                                                 'low':cur_kline['low'],
+                                                 'volume':cur_kline['volume'],
+                                                 'turnover':cur_kline['turnover'],
+                                                 'recover_price':subscribe_warrant["recovery_price"],
+                                                 'recover_price_radio':recover_price_radio,
+                                                'recover_stock':subscribe_warrant['stock'],
+                                                'street_rate':subscribe_warrant['street_rate'],'street_vol':subscribe_warrant['street_vol'],
+                                                'type':subscribe_warrant["type"],'isbuy':'true','buyprice': ls.to_dict("records")[0]['last_price'],'buysocket':subscribe_warrant["buy"]["stock"]})
+                    send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%(recover_price_radio*100))
+                    self.call_dict[subscribe_warrant["buy"]["stock"]] = 1
+                else:
+                    time.sleep(10)
         else:
             self.call_dict.pop(subscribe_warrant["buy"]["stock"], None)
             if recover_price_radio < 0.01:
@@ -285,15 +297,38 @@ class CurKlineCallback(CurKlineHandlerBase):
         self.logger.flush()
         return RET_OK, data
 
+def looper(quote_ctx, focus):
+    res = get_subscribe_stock(quote_ctx, focus)
+    re_focus = list(res.keys())
+    print("完整结果", res)
+    print("需要关注的正股", re_focus)
+    send_weixin("begin:" + str(re_focus), "Subscribe")
+    callback = CurKlineCallback(res, quote_ctx)
+    print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback))
+
+    while True:
+        time.sleep(20)
+        if callback.is_stop:
+            print("反注册全部callback")
+            quote_ctx.unsubscribe_all()
+            time.sleep(5)
+            res = get_subscribe_stock(quote_ctx, focus)
+            re_focus = list(res.keys())
+            print("完整结果", res)
+            print("需要关注的正股", re_focus)
+            send_weixin("begin:" + str(re_focus), "Subscribe")
+            callback = CurKlineCallback(res, quote_ctx)
+            print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback))
+
+
+
 quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
 focus = get_focus_stock(quote_ctx)
-res = get_subscribe_stock(quote_ctx, focus)
-re_focus = list(res.keys())
-print("完整结果", res)
-print("需要关注的正股", re_focus)
-send_weixin("begin:"+str(re_focus),"Subscribe")
-print("关注结果：",subscribe_stock(quote_ctx, re_focus, CurKlineCallback(res,quote_ctx)))
-time.sleep(9999)
+
+looper(quote_ctx, focus)
+
+
+
 send_weixin("done","done")
 """******** 购买熊: {'stock': 'HK.68926', 'name': '美团高盛一七熊K.P', 'stock_owner': 'HK.03690', 'type': 'BEAR', 'issuer': 'GS', 'maturity_time': '2021-07-30', 'list_time': '2020-11-30', 'last_trade_time': '2021-07-29', 'recovery_price': 310.88, 'conversion_ratio': 500.0, 'lot_size': 5000, 'strike_price': 313.88, 'last_close_price': 0.04, 'cur_price': 0.04, 'price_change_val': 0.0, 'change_rate': 0.0, 'status': 'NORMAL', 'bid_price': 0.04, 'ask_price': 0.042, 'bid_vol': 15000000, 'ask_vol': 15000000, 'volume': 34480000, 'turnover': 1301545.0, 'score': 72.764, 'premium': 1.183, 'break_even_point': 293.88, 'leverage': 14.87, 'ipop': 5.25, 'price_recovery_ratio': -4.336078229541951, 'conversion_price': 20.0, 'street_rate': 0.0, 'street_vol': 0, 'amplitude': 0.0, 'issue_size': 100000000, 'high_price': 0.042, 'low_price': 0.029, 'implied_volatility': nan, 'delta': nan, 'effective_leverage': 14.87, 'list_timestamp': 1606665600.0, 'last_trade_timestamp': 1627488000.0, 'maturity_timestamp': 1627574400.0, 'upper_strike_price': nan, 'lower_strike_price': nan, 'inline_price_status': nan}
 k线回调  {'code': 'HK.00941', 'time_key': '2020-11-30 14:46:00', 'open': 46.65, 'close': 46.7, 'high': 46.7, 'low': 46.65, 'volume': 4000, 'turnover': 186725.0, 'k_type': 'K_1M', 'last_close': 0.0}

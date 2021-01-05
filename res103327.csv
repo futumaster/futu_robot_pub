@@ -1,0 +1,3 @@
+stock,open,close,high,low,volume,turnover,recover_price,recover_price_radio,recover_stock,street_rate,street_vol,type,isbuy,buyprice,buysocket
+HK.09988,229.4,229.0,229.4,229.0,147100,33712200.0,228.0,0.0043859649122807015,HK.53758,16.03,9618000,BULL,true,0.207,HK.18307
+HK.00700,563.5,562.0,564.0,562.0,150900,84963350.0,556.88,0.009194081310156595,HK.57660,8.449,8449999,BULL,true,0.096,HK.56980

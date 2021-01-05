@@ -101,14 +101,13 @@ def get_short_sell_socket(quote_ctx, socket_list):
 
 
 short_sell_sockets = read_cache("short_sell_sockets_15")
-#short_sell_sockets = []
+short_sell_sockets = []
 quote_ctx = None
 if not short_sell_sockets:
     quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
     socket_list = get_socket_list(quote_ctx)
     short_sell_sockets = get_short_sell_socket(quote_ctx, socket_list)
     save_cache("short_sell_sockets_15",short_sell_sockets)
-    quote_ctx.close()  # 结束后记得关闭当条连接，防止连接条数用尽
 print(short_sell_sockets)
 print(len(short_sell_sockets))
 all_code = []
@@ -118,7 +117,13 @@ for so in short_sell_sockets:
     all_code.append(code)
 if not quote_ctx:
     quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
-if False:
+if True:
+    ret, data = quote_ctx.get_user_security("ShortSale")
+    if ret != RET_OK:
+        print('error:', data)
+        sys.exit()
+    code_list = data['code'].values.tolist()
+    quote_ctx.modify_user_security("ShortSale", ModifyUserSecurityOp.DEL, code_list)
     ret, data = quote_ctx.modify_user_security("ShortSale", ModifyUserSecurityOp.ADD, all_code)
     if ret == RET_OK:
         print(data)  # 返回success
@@ -132,3 +137,4 @@ pre_day = (today - datetime.timedelta(days=90)
 end_dt = today.strftime('%Y-%m-%d')
 ret_code, prices, page_req_key = quote_ctx.request_history_kline(code, start=pre_day, end=end_dt)
 print(prices)
+quote_ctx.close()  # 结束后记得关闭当条连接，防止连接条数用尽

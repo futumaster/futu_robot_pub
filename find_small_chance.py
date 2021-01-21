@@ -1,9 +1,14 @@
+####可空地址：
+# https://www.hkex.com.hk/-/media/HKEX-Market/Services/Trading/Securities/Securities-Lists/Designated-Securities-Eligible-for-Short-Selling/ds_list20201223_c.csv?la=zh-HK
+# https://www.hkex.com.hk/-/media/HKEX-Market/Services/Trading/Securities/Securities-Lists/Designated-Securities-Eligible-for-Short-Selling/ds_list20201224_c.csv?la=zh-HK
 
 import time,sys
 from futu import *
 import pickle
 import talib
 import datetime
+import urllib.request
+import csv
 
 def get_socket_list(quote_ctx, market=Market.US):
     """
@@ -99,7 +104,56 @@ def get_short_sell_socket(quote_ctx, socket_list):
             print('error:', data)
     return short_sell_sockets
 
+def get_short_socket(default_day = "20210119"):
+    baseurl = "https://www.hkex.com.hk/-/media/HKEX-Market/Services/Trading/Securities/Securities-Lists/Designated-Securities-Eligible-for-Short-Selling/ds_list%s_c.csv?la=zh-HK"
+    ###eg:20201223
+    result = None
+    try:
+        today = datetime.datetime.today().strftime('%Y%m%d')
+        print("获取空股：",baseurl%today)
+        f = urllib.request.urlopen(
+            baseurl%today)
+        result = f.read().decode('utf-8')
+        print("csv结果",result)
+    except:
+        print("当天获取失败，获取默认日期空股：",baseurl%default_day)
+        f = urllib.request.urlopen(
+            baseurl%default_day)
+        result = f.read().decode('utf-8')
+        print("csv结果",result)
+    if result:
+        sockets = []
+        result = result.split("\r\n")
+        for line in result:
+            if "股本證券" not in line:
+                continue
+            args = line.split(",")
+            sockets.append("HK.%05d" % int(args[1]))
+        return sockets
+    return None
 
+def full_update_security(quote_ctx, new_code_list, user_security="short1224"):
+    ret, data = quote_ctx.get_user_security(user_security)
+    if ret != RET_OK:
+        print('error:', data)
+        sys.exit()
+    code_list = data['code'].values.tolist()
+    quote_ctx.modify_user_security(user_security, ModifyUserSecurityOp.DEL, code_list)
+    ret, data = quote_ctx.modify_user_security(user_security, ModifyUserSecurityOp.ADD, new_code_list)
+    print("修改",user_security,ret)
+
+short1224 = get_short_socket()
+quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
+socket_list_groups = list_of_groups(short1224,400)
+new_socket_list = []
+for socket_list in socket_list_groups:
+    ret, ls = quote_ctx.get_market_snapshot(socket_list)
+    if ret == 0:
+        short_dicts = ls[(ls["open_price"] < 5) & (ls["total_market_val"] < 100000000000) & (ls["pe_ttm_ratio"] < 0) & (ls["pe_ratio"] < 0)]
+        new_socket_list = new_socket_list + short_dicts['code'].values.tolist()
+full_update_security(quote_ctx,new_socket_list, "short1224")
+quote_ctx.close()
+sys.exit()
 short_sell_sockets = read_cache("short_sell_sockets_15")
 short_sell_sockets = []
 quote_ctx = None

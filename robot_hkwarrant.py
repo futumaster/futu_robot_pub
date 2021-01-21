@@ -1,7 +1,7 @@
 import time,sys
 from futu import *
 import csv
-
+import platform
 class TradeHelper():
     # API parameter setting
     api_svr_ip = '127.0.0.1'  # 账户登录的牛牛客户端PC的IP, 本机默认为127.0.0.1
@@ -131,8 +131,13 @@ class TradeHelper():
                 print('stop_loss: MAKE BUY ORDER FAILURE: {}'.format(ret_data))
 
 import requests
+from subprocess import call
 
 def send_weixin(title=None,text=None):
+    if "Darwin" in platform.platform():
+        cmd = 'display notification \"' + \
+              "%s"%text + '\" with title \"%s\"'%title
+        call(["osascript", "-e", cmd])
     if title == None and text == None:
         pass
     elif title!=None and text!=None:
@@ -156,16 +161,18 @@ def get_focus_stock(quote_ctx):
 def get_subscribe_stock(quote_ctx, stocks,street_min=8):
     # 选出有街货大于x%，接近x%回收价的正股与伴生反向操作涡轮，回收价位，正股做key
     res = {}
+    remove_sockets = []
     for stock_num in stocks:
         req = WarrantRequest()
         req.sort_field = SortField.RECOVERY_PRICE
 
         req.type_list = [WrtType.BULL, WrtType.BEAR]
         req.street_min = street_min
-        req.price_recovery_ratio_max = 4.9
-        req.price_recovery_ratio_min = -4.9
+        req.price_recovery_ratio_max = 5
+        req.price_recovery_ratio_min = -5
         req.status = "NORMAL"
         ret, ls = quote_ctx.get_warrant(stock_owner=stock_num, req=req)
+        time.sleep(0.3)
         if ret == RET_OK:  # 先判断接口返回是否正常，再取数据
             warrant_data_list, last_page, all_count = ls
 
@@ -191,15 +198,25 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
                 req1.maturity_timemin = time_min.strftime("%Y-%m-%d")
                 req1.status = "NORMAL"
                 ret, ls = quote_ctx.get_warrant(stock_owner=stock_num, req=req1)
-                warrant_data_list, last_page, all_count = ls
-                ##TODO：计算敏感度  正股最低买卖价位 x 对冲值delta(对冲值，仅认购认沽支持此字段) / 兌换比率（conversion_ratio） x 窝轮最低买卖价位
-                highscore_warrants = warrant_data_list.loc[
-                    warrant_data_list["score"] > 70].to_dict("records")
-                print("获取高分的窝轮:", highscore_warrants)
-                if len(highscore_warrants) > 0:
-                    res[stock_num]["buy"] = highscore_warrants[-1]
+                if ret == RET_OK:
+                    warrant_data_list, last_page, all_count = ls
+                    ##TODO：计算敏感度  正股最低买卖价位 x 对冲值delta(对冲值，仅认购认沽支持此字段) / 兌换比率（conversion_ratio） x 窝轮最低买卖价位
+                    highscore_warrants = warrant_data_list.loc[
+                        warrant_data_list["score"] > 70].to_dict("records")
+                    print("获取高分的窝轮:", highscore_warrants)
+                    if len(highscore_warrants) > 0:
+                        res[stock_num]["buy"] = highscore_warrants[-1]
+                    else:
+                        res[stock_num]["buy"] = warrant_data_list.to_dict("records")[-1]
                 else:
-                    res[stock_num]["buy"] = warrant_data_list.to_dict("records")[-1]
+                    print(ret,ls)
+            else:
+                print("no warrent data with", stock_num)
+                #remove_sockets.append(stock_num)
+
+    #if remove_sockets:
+    #    quote_ctx.modify_user_security("focus", ModifyUserSecurityOp.DEL, remove_sockets)
+
     return res
 
 def subscribe_stock(quote_ctx, focus, callback):

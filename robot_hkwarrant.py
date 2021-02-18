@@ -1,7 +1,10 @@
+##TODO: 添加语音提醒，被kill的涡轮的价值是多少？
+
 import time,sys
 from futu import *
 import csv
 import platform
+import FutuSqlite
 class TradeHelper():
     # API parameter setting
     api_svr_ip = '127.0.0.1'  # 账户登录的牛牛客户端PC的IP, 本机默认为127.0.0.1
@@ -225,24 +228,58 @@ def subscribe_stock(quote_ctx, focus, callback):
     return res
 
 class CurKlineCallback(CurKlineHandlerBase):
-    def __init__(self, subscribe_warrants, quote_ctx):
+    def __init__(self, subscribe_warrants, quote_ctx, logger, logger_writer):
         CurKlineHandlerBase.__init__(self)
         self.quote_ctx = quote_ctx
         self.subscribe_warrants = subscribe_warrants
         self.call_dict = {}
-        self.logger = open("res%s.csv"%datetime.now().strftime('%H%M%S'), "w", newline='')
-        self.logger_writer = csv.DictWriter(self.logger,
-                                            fieldnames=['stock', 'open','close',
-                                                        'high','low','volume',
-                                                        'turnover','recover_price','recover_price_radio',
-                                                        'recover_stock','street_rate','street_vol','type','isbuy','buyprice','buysocket'])
-        self.logger_writer.writeheader()
+        self.logger = logger
+        self.logger_writer = logger_writer
         self.is_stop = False
+        self.futu_sqlite = None
 
     def state(self):
         return self.is_stop
 
+    def real_log(self, cur_code, recover_price_radio, is_buy, buy_price, cur_kline, subscribe_warrant):
+        self.futu_sqlite.insert_ai_data(
+            cur_code,
+            cur_kline['open'],
+            cur_kline['close'],
+            cur_kline['high'],
+            cur_kline['low'],
+            cur_kline['volume'],
+            cur_kline['turnover'],
+            subscribe_warrant["recovery_price"],
+            recover_price_radio,
+            subscribe_warrant['stock'],
+            subscribe_warrant['street_rate'],
+            subscribe_warrant['street_vol'],
+            subscribe_warrant["type"],
+            is_buy,
+            buy_price,
+            subscribe_warrant["buy"]["stock"]
+        )
+        self.logger_writer.writerow({'stock': cur_code,
+                                     'open': cur_kline['open'],
+                                     'close': cur_kline['close'],
+                                     'high': cur_kline['high'],
+                                     'low': cur_kline['low'],
+                                     'volume': cur_kline['volume'],
+                                     'turnover': cur_kline['turnover'],
+                                     'recover_price': subscribe_warrant["recovery_price"],
+                                     'recover_price_radio': recover_price_radio,
+                                     'recover_stock': subscribe_warrant['stock'],
+                                     'street_rate': subscribe_warrant['street_rate'],
+                                     'street_vol': subscribe_warrant['street_vol'],
+                                     'type': subscribe_warrant["type"], 'isbuy': 'true',
+                                     'buyprice': buy_price,
+                                     'buysocket': subscribe_warrant["buy"]["stock"]})
+
     def on_recv_rsp(self, rsp_str):
+        if not self.futu_sqlite:
+            self.futu_sqlite = FutuSqlite.FutuSqlite()
+
         ret_code, data = super(CurKlineCallback,self).on_recv_rsp(rsp_str)
         if ret_code != RET_OK:
             print("CurKlineTest: error, msg: %s" % data)
@@ -252,6 +289,7 @@ class CurKlineCallback(CurKlineHandlerBase):
         cur_kline = data.to_dict("records")[0]
         #print("k线回调 ", cur_kline) # CurKlineTest自己的处理逻辑
         cur_code = cur_kline["code"]
+
         subscribe_warrant = self.subscribe_warrants[cur_code]
         recover_price_radio = 1.0
         if subscribe_warrant["type"] == "BEAR":
@@ -262,71 +300,66 @@ class CurKlineCallback(CurKlineHandlerBase):
             recover_price_radio = float(cur_kline["low"] - subscribe_warrant["recovery_price"]) / float(
                 subscribe_warrant["recovery_price"])
             #print("BULL 回收价相距", recover_price_radio, subscribe_warrant["recovery_price"], cur_kline["low"])
-        if recover_price_radio <= 0:
-            self.is_stop = True
         if recover_price_radio < 0.005:
             ##buy bull
             if subscribe_warrant["buy"]["stock"] in self.call_dict.keys():
                 self.call_dict[subscribe_warrant["buy"]["stock"]] = self.call_dict[subscribe_warrant["buy"]["stock"]] + 1
                 if self.call_dict[subscribe_warrant["buy"]["stock"]] < 3:
-                    log = "********* 距离:" + str(float(recover_price_radio*100)) + "回收价:" + str(subscribe_warrant["recovery_price"]) + "购买:" + subscribe_warrant["buy"]['stock'] +"," + subscribe_warrant["buy"]['name']
-                    print(log)
-                    send_weixin(log)
+                    log = "距离%s,回收价%s,回收量%s,建议购买%s"%(str(float(recover_price_radio*100)),
+                                                                       str(subscribe_warrant["recovery_price"]),
+                                                                       str(subscribe_warrant["street_vol"]),
+                                                                       subscribe_warrant["buy"]['stock'])
+                    print("** "+log)
+                    send_weixin("** "+log)
+                    os.system("say " + log)
             else:
                 ret, ls = self.quote_ctx.get_market_snapshot([subscribe_warrant["buy"]["stock"], ])
                 print(ret)
                 if ret == 0:
-                    self.logger_writer.writerow({'stock':cur_code,
-                                                 'open':cur_kline['open'],
-                                                 'close':cur_kline['close'],
-                                                 'high':cur_kline['high'],
-                                                 'low':cur_kline['low'],
-                                                 'volume':cur_kline['volume'],
-                                                 'turnover':cur_kline['turnover'],
-                                                 'recover_price':subscribe_warrant["recovery_price"],
-                                                 'recover_price_radio':recover_price_radio,
-                                                'recover_stock':subscribe_warrant['stock'],
-                                                'street_rate':subscribe_warrant['street_rate'],'street_vol':subscribe_warrant['street_vol'],
-                                                'type':subscribe_warrant["type"],'isbuy':'true','buyprice': ls.to_dict("records")[0]['last_price'],'buysocket':subscribe_warrant["buy"]["stock"]})
+                    self.real_log(cur_code, recover_price_radio, 'true',ls.to_dict("records")[0]['last_price'],cur_kline, subscribe_warrant)
                     send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%(recover_price_radio*100))
                     self.call_dict[subscribe_warrant["buy"]["stock"]] = 1
                 else:
                     time.sleep(10)
+            if recover_price_radio <= 0:
+                log = "%s触发%s回收价"%(cur_code, str(subscribe_warrant["recovery_price"]))
+                send_weixin("** " + log)
+                os.system("say " + log)
+                self.is_stop = True
         else:
             self.call_dict.pop(subscribe_warrant["buy"]["stock"], None)
             if recover_price_radio < 0.01:
                 ret, ls = self.quote_ctx.get_market_snapshot([subscribe_warrant["buy"]["stock"], ])
                 try:
-                    self.logger_writer.writerow({'stock':cur_code,
-                                             'open':cur_kline['open'],
-                                             'close':cur_kline['close'],
-                                             'high':cur_kline['high'],
-                                             'low':cur_kline['low'],
-                                             'volume':cur_kline['volume'],
-                                             'turnover':cur_kline['turnover'],
-                                             'recover_price':subscribe_warrant["recovery_price"],
-                                             'recover_price_radio':recover_price_radio,
-                                            'recover_stock':subscribe_warrant['stock'],
-                                            'street_rate':subscribe_warrant['street_rate'],'street_vol':subscribe_warrant['street_vol'],
-                                            'type':subscribe_warrant["type"],'isbuy':'false','buyprice': ls.to_dict("records")[0]['last_price'],'buysocket':subscribe_warrant["buy"]["stock"]})
+                    self.real_log(cur_code, recover_price_radio, 'false',ls.to_dict("records")[0]['last_price'],cur_kline, subscribe_warrant)
                 except:
                     pass
         self.logger.flush()
         return RET_OK, data
 
 def looper(quote_ctx, focus):
+    logger = open("res%s.csv" % datetime.now().strftime('%H%M%S'), "w", newline='')
+    logger_writer = csv.DictWriter(logger,
+                                        fieldnames=['stock', 'open', 'close',
+                                                    'high', 'low', 'volume',
+                                                    'turnover', 'recover_price', 'recover_price_radio',
+                                                    'recover_stock', 'street_rate', 'street_vol', 'type', 'isbuy',
+                                                    'buyprice', 'buysocket'])
+    logger_writer.writeheader()
+
     res = get_subscribe_stock(quote_ctx, focus)
     re_focus = list(res.keys())
     print("完整结果", res)
     print("需要关注的正股", re_focus)
     send_weixin("begin:" + str(re_focus), "Subscribe")
-    callback = CurKlineCallback(res, quote_ctx)
+    callback = CurKlineCallback(res, quote_ctx, logger, logger_writer)
     print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback))
 
     while True:
         time.sleep(20)
         if callback.is_stop:
             print("反注册全部callback")
+            os.system("say 反注册Callback")
             quote_ctx.unsubscribe_all()
             time.sleep(5)
             res = get_subscribe_stock(quote_ctx, focus)
@@ -334,11 +367,11 @@ def looper(quote_ctx, focus):
             print("完整结果", res)
             print("需要关注的正股", re_focus)
             send_weixin("begin:" + str(re_focus), "Subscribe")
-            callback = CurKlineCallback(res, quote_ctx)
+            callback = CurKlineCallback(res, quote_ctx, logger, logger_writer)
             print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback))
 
 
-
+#time.sleep(11*60*60-40*60)
 quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
 focus = get_focus_stock(quote_ctx)
 

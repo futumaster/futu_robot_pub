@@ -289,6 +289,8 @@ class CurKlineCallback(CurKlineHandlerBase):
         cur_kline = data.to_dict("records")[0]
         #print("k线回调 ", cur_kline) # CurKlineTest自己的处理逻辑
         cur_code = cur_kline["code"]
+        if cur_code not in self.subscribe_warrants:
+            return
 
         subscribe_warrant = self.subscribe_warrants[cur_code]
         recover_price_radio = 1.0

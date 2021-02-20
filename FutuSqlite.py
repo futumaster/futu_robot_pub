@@ -60,34 +60,10 @@ class FutuSqlite:
         self.cursor.close()
         self.conn.close()
 
-
-#futu = FutuSqlite()
-#futu.select_ai_data()
-#futu.insert_ai_data()
-#futu.select_ai_data()
-#futu.close()
-
-"""
-INSERT INTO ai_history (TIME_DAY,STOCK,OPEN_PRICE,CLOSE_PRICE,HIGH,LOW,VOLUMN,TURNOVER,RECOVER_PRICE,RECOVER_PRICE_RADIO,RECOVER_STOCK,STREET_RATE,STREET_VOL,TYPE,IS_BUY,BUY_PRICE,BUY_STOCK) VALUES (
-  '%s',
-  '%s',
-  '5.91',
-  '5.33',
-  '2.33',
-  '0.99',
-  '271000',
-  '4473570',
-  '5.99',
-  '0.00510204',
-  'HK.51129',
-  '10.48',
-  '8384000',
-  'BULL',
-  'FALSE',
-  '0.073',
-  'HK.64187'
-); 
-"""
-
-
-
+if __name__ == '__main__':
+    """测试代码"""
+    futu = FutuSqlite()
+    futu.select_ai_data()
+    futu.insert_ai_data()
+    futu.select_ai_data()
+    futu.close()

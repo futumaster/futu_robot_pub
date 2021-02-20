@@ -1,3 +1,6 @@
+"""
+Summary: 从港交所和富途的数据中找符合条件的，可以short的股票并存放到股票列表中
+"""
 ####可空地址：
 # https://www.hkex.com.hk/-/media/HKEX-Market/Services/Trading/Securities/Securities-Lists/Designated-Securities-Eligible-for-Short-Selling/ds_list20201223_c.csv?la=zh-HK
 # https://www.hkex.com.hk/-/media/HKEX-Market/Services/Trading/Securities/Securities-Lists/Designated-Securities-Eligible-for-Short-Selling/ds_list20201224_c.csv?la=zh-HK

@@ -1,6 +1,6 @@
 ##Done: 添加语音提醒，被kill的涡轮的价值是多少？
 ##TODO 20210220： 早上开盘的时候的波幅是完全不同的，需要验证策略，如果前15分钟往上杀，往下杀，可以考虑自动买入
-
+##TODO 20210222:  如果发现连续下挫kill牛，有没有可能走买正股的方式
 import time,sys
 from futu import *
 import csv
@@ -189,7 +189,7 @@ class CurKlineCallback(CurKlineHandlerBase):
             if subscribe_warrant["buy"]["stock"] in self.call_dict.keys():
                 self.call_dict[subscribe_warrant["buy"]["stock"]] = self.call_dict[subscribe_warrant["buy"]["stock"]] + 1
                 if self.call_dict[subscribe_warrant["buy"]["stock"]] < 3:
-                    log = "距离%s,回收价%s,回收量%s,建议购买%s"%(str(float(recover_price_radio*100)),
+                    log = "距离%s,回收价%s,回收量%s,建议购买%s"%(str(round(float(recover_price_radio*100),3)),
                                                                        str(subscribe_warrant["recovery_price"]),
                                                                        str(subscribe_warrant["street_vol"]),
                                                                        subscribe_warrant["buy"]['stock'])
@@ -201,7 +201,7 @@ class CurKlineCallback(CurKlineHandlerBase):
                 print(ret)
                 if ret == 0:
                     self.real_log(cur_code, recover_price_radio, 'true',ls.to_dict("records")[0]['last_price'],cur_kline, subscribe_warrant)
-                    send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%(recover_price_radio*100))
+                    send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%round(float(recover_price_radio*100),3))
                     self.call_dict[subscribe_warrant["buy"]["stock"]] = 1
                 else:
                     time.sleep(10)

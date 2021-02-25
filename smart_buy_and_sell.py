@@ -16,13 +16,13 @@ class SimpleBuyAndSell(object):
     unlock_password = "440105"  # 美股和港股交易解锁密码
     trade_env = ft.TrdEnv.SIMULATE
 
-    def __init__(self, stock, quote_ctx):
+    def __init__(self, quote_ctx):
         """
         Constructor
         """
-        self.stock = stock
         self.quote_ctx = quote_ctx
-        self.trade_ctx = self.context_setting()
+        self.context_setting()
+        self.qty_dicts = {}
 
     def close(self):
         self.quote_ctx.close()
@@ -37,80 +37,119 @@ class SimpleBuyAndSell(object):
             raise Exception("请先配置交易解锁密码! password: {}".format(
                 self.unlock_password))
 
-        if 'HK.' in self.stock:
-            trade_ctx = ft.OpenHKTradeContext(host=self.api_svr_ip, port=self.api_svr_port)
-        elif 'US.' in self.stock:
-            trade_ctx = ft.OpenUSTradeContext(host=self.api_svr_ip, port=self.api_svr_port)
-        else:
-            raise Exception("不支持的stock: {}".format(self.stock))
+        self.hk_trade_ctx = ft.OpenHKTradeContext(host=self.api_svr_ip, port=self.api_svr_port)
+        self.us_trade_ctx = ft.OpenUSTradeContext(host=self.api_svr_ip, port=self.api_svr_port)
 
         if self.trade_env == ft.TrdEnv.REAL:
-            ret_code, ret_data = trade_ctx.unlock_trade(
+            ret_code, ret_data = self.hk_trade_ctx.unlock_trade(
                 self.unlock_password)
             if ret_code == ft.RET_OK:
-                print('解锁交易成功!')
+                print('hk解锁交易成功!')
             else:
-                raise Exception("请求交易解锁失败: {}".format(ret_data))
+                raise Exception("hk请求交易解锁失败: {}".format(ret_data))
         else:
-            print('解锁交易成功!')
+            print('hk解锁交易成功!')
 
-        return trade_ctx
+        if self.trade_env == ft.TrdEnv.REAL:
+            ret_code, ret_data = self.us_trade_ctx.unlock_trade(
+                self.unlock_password)
+            if ret_code == ft.RET_OK:
+                print('us解锁交易成功!')
+            else:
+                raise Exception("us请求交易解锁失败: {}".format(ret_data))
+        else:
+            print('us解锁交易成功!')
 
-    def buy(self):
-                ret_code, data = self.quote_ctx.get_market_snapshot(
-                    [self.stock])
-                if ret_code != 0:
-                    raise Exception('市场快照数据获取异常 {}'.format(data))
-                cur_price = data['last_price'][0]
-                ret_code, ret_data = self.trade_ctx.place_order(
-                    price=cur_price,
-                    qty=cur_pos,
-                    code=self.stock,
-                    trd_side=ft.TrdSide.SELL,
-                    order_type=ft.OrderType.NORMAL,
-                    trd_env=self.trade_env)
-                if ret_code == ft.RET_OK:
-                    print('stop_loss MAKE SELL ORDER\n\tcode = {} price = {} quantity = {}'
-                          .format(self.stock, cur_price, cur_pos))
-                else:
-                    print('stop_loss: MAKE SELL ORDER FAILURE: {}'.format(ret_data))
 
-        # 如果短均线从下往上突破长均线，为入场信号
-        if macd[-1] > signal[-1] and macd[-2] < signal[-2]:
-            # 满仓入股
-            ret_code, acc_info = self.trade_ctx.accinfo_query(
-                trd_env=self.trade_env)
-            if ret_code != 0:
-                raise Exception('账户信息获取失败! 请重试: {}'.format(acc_info))
+    def sell(self, stock):
+        trade_ctx = None
+        if 'HK.' in stock:
+            trade_ctx = self.hk_trade_ctx
+        elif 'US.' in stock:
+            trade_ctx = self.us_trade_ctx
 
-            ret_code, snapshot = self.quote_ctx.get_market_snapshot(
-                [self.stock])
+        # 计算现在portfolio中股票的仓位
+        ret_code, data = trade_ctx.position_list_query(
+            trd_env=self.trade_env)
+
+        if ret_code != ft.RET_OK:
+            raise Exception('账户信息获取失败: {}'.format(data))
+        pos_info = data.set_index('code')
+        try:
+            cur_pos = int(pos_info['qty'][stock])
+        except:
+            print("没买进",stock)
+            return
+        cur_price = 0
+        ret, data = self.quote_ctx.get_order_book(stock, num=1)
+        if ret == ft.RET_OK:
+            print(data)
+            cur_price = data['Bid'][0][0]
+
+        ret_code, ret_data = trade_ctx.place_order(
+            price=cur_price,
+            qty=cur_pos,
+            code=stock,
+            trd_side=ft.TrdSide.SELL,
+            order_type=ft.OrderType.NORMAL,
+            trd_env=self.trade_env)
+        if ret_code == ft.RET_OK:
+            print('stop_loss MAKE SELL ORDER\n\tcode = {} price = {} quantity = {}'
+                  .format(stock, cur_price, cur_pos))
+        else:
+            print('stop_loss: MAKE SELL ORDER FAILURE: {}'.format(ret_data))
+        self.quote_ctx.unsubscribe([stock], [ft.SubType.ORDER_BOOK])
+
+    def buy(self, stock, lot_size=0, percentage=0.1):
+        self.quote_ctx.subscribe([stock], [ft.SubType.ORDER_BOOK], subscribe_push=False)
+        trade_ctx = None
+        if 'HK.' in stock:
+            trade_ctx = self.hk_trade_ctx
+        elif 'US.' in stock:
+            trade_ctx = self.us_trade_ctx
+        # 满仓入股
+        ret_code, acc_info = trade_ctx.accinfo_query(
+            trd_env=self.trade_env)
+        if ret_code != 0:
+            raise Exception('账户信息获取失败! 请重试: {}'.format(acc_info))
+
+        if lot_size == 0:
+            ret_code, snapshot = self.quote_ctx.get_market_snapshot([self.stock])
             if ret_code != 0:
                 raise Exception('市场快照数据获取异常 {}'.format(snapshot))
             lot_size = snapshot['lot_size'][0]
-            cur_price = snapshot['last_price'][0]
-            cash = acc_info['power'][0]  # 购买力
-            qty = int(math.floor(cash / cur_price))
-            qty = qty // lot_size * lot_size
 
-            ret_code, ret_data = self.trade_ctx.place_order(
-                price=cur_price,
-                qty=qty,
-                code=self.stock,
-                trd_side=ft.TrdSide.BUY,
-                order_type=ft.OrderType.NORMAL,
-                trd_env=self.trade_env)
-            if not ret_code:
-                print(
-                    'stop_loss MAKE BUY ORDER\n\tcode = {} price = {} quantity = {}'
-                    .format(self.stock, cur_price, qty))
-            else:
-                print('stop_loss: MAKE BUY ORDER FAILURE: {}'.format(ret_data))
+        cur_price = 0
+        ###返回数据：{'code': 'HK.00700', 'svr_recv_time_bid': '', 'svr_recv_time_ask': '', 'Bid': [(384.2, 15400, 6, {}),], 'Ask': [(384.4, 3000, 9, {}),]}
+        ret, data = self.quote_ctx.get_order_book(stock, num=1)
+        if ret == ft.RET_OK:
+            print(data)
+            cur_price = data['Ask'][0][0]
+
+
+        cash = acc_info['power'][0]*percentage  # 购买力
+        qty = int(math.floor(cash / cur_price))
+        qty = qty // lot_size * lot_size
+
+        ret_code, ret_data = trade_ctx.place_order(
+            price=cur_price,
+            qty=qty,
+            code=stock,
+            trd_side=ft.TrdSide.BUY,
+            order_type=ft.OrderType.NORMAL,
+            trd_env=self.trade_env)
+        if not ret_code:
+            print(
+                'stop_loss MAKE BUY ORDER\n\tcode = {} price = {} quantity = {}'
+                .format(stock, cur_price, qty))
+        else:
+            print('stop_loss: MAKE BUY ORDER FAILURE: {}'.format(ret_data))
+            print('qty',qty)
 
 
 if __name__ == "__main__":
     STOCK = "HK.00123"
+    quote_ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
 
-    test = SimpleBuyAndSell(STOCK)
-    test.handle_data()
-    test.close()
+    test = SimpleBuyAndSell(quote_ctx)
+    test.sell(STOCK)

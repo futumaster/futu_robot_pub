@@ -7,6 +7,7 @@ import csv
 import platform
 import FutuSqlite
 import requests
+import smart_buy_and_sell
 from subprocess import call
 
 def send_weixin(title=None,text=None):
@@ -98,6 +99,7 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
 def subscribe_stock(quote_ctx, focus, callback):
     quote_ctx.set_handler(callback)  # 设置实时报价回调
     res = quote_ctx.subscribe(focus, [SubType.K_1M])
+    #quote_ctx.subscribe(focus, [SubType.ORDER_BOOK], subscribe_push=False)
     return res
 
 class CurKlineCallback(CurKlineHandlerBase):
@@ -109,6 +111,9 @@ class CurKlineCallback(CurKlineHandlerBase):
         self.is_stop = False
         self.futu_sqlite = None
         self.is_open_csv_logger = is_open_csv_logger
+
+        self.buyer = smart_buy_and_sell.SimpleBuyAndSell(quote_ctx)
+
         if self.is_open_csv_logger:
             self.logger = open("res%s.csv" % datetime.now().strftime('%H%M%S'), "w", newline='')
             self.logger_writer = csv.DictWriter(logger,
@@ -189,10 +194,13 @@ class CurKlineCallback(CurKlineHandlerBase):
             if subscribe_warrant["buy"]["stock"] in self.call_dict.keys():
                 self.call_dict[subscribe_warrant["buy"]["stock"]] = self.call_dict[subscribe_warrant["buy"]["stock"]] + 1
                 if self.call_dict[subscribe_warrant["buy"]["stock"]] < 3:
-                    log = "距离%s,回收价%s,回收量%s,建议购买%s"%(str(round(float(recover_price_radio*100),3)),
+                    log = "距离%s,回收价%s,回收量%s,建议购买%s %s"%(str(round(float(recover_price_radio*100),3)),
                                                                        str(subscribe_warrant["recovery_price"]),
                                                                        str(subscribe_warrant["street_vol"]),
+                                                                       str(subscribe_warrant["buy"]["name"]),
                                                                        subscribe_warrant["buy"]['stock'])
+                    if self.call_dict[subscribe_warrant["buy"]["stock"]] <= 2:
+                        self.buyer.buy(subscribe_warrant["buy"]['stock'],subscribe_warrant["buy"]["lot_size"],0.05)
                     print("** "+log)
                     send_weixin("** "+log)
                     os.system("say " + log)
@@ -207,6 +215,10 @@ class CurKlineCallback(CurKlineHandlerBase):
                     time.sleep(10)
             if recover_price_radio <= 0:
                 log = "%s触发%s回收价"%(cur_code, str(subscribe_warrant["recovery_price"]))
+                ##卖涡轮
+                self.buyer.sell(subscribe_warrant["buy"]['stock'])
+                ##买正股票
+                self.buyer.buy(cur_code, percentage=0.1)
                 send_weixin("** " + log)
                 os.system("say " + log)
                 self.is_stop = True

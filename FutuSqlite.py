@@ -55,7 +55,7 @@ class FutuSqlite:
             cursq.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name = ?;", (table,))
             create = cursq.fetchone()[0]
             create = create.replace("DATETIME", "TIMESTAMPTZ").replace("DOUBLE","FLOAT")
-            cursq.execute("SELECT * FROM %s where TIME_DAY > '%s';" % (table, '2021-02-21'))
+            cursq.execute("SELECT * FROM %s where TIME_DAY > '%s';" % (table, '2021-02-23'))
             rows = cursq.fetchall()
             colcount = len(rows[0])
             pholder = '%s,' * colcount

@@ -114,7 +114,7 @@ class SimpleBuyAndSell(object):
             raise Exception('账户信息获取失败! 请重试: {}'.format(acc_info))
 
         if lot_size == 0:
-            ret_code, snapshot = self.quote_ctx.get_market_snapshot([self.stock])
+            ret_code, snapshot = self.quote_ctx.get_market_snapshot([stock])
             if ret_code != 0:
                 raise Exception('市场快照数据获取异常 {}'.format(snapshot))
             lot_size = snapshot['lot_size'][0]

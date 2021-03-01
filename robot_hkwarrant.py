@@ -104,7 +104,12 @@ def subscribe_stock(quote_ctx, focus, callback):
     return res
 
 class CurKlineCallback(CurKlineHandlerBase):
-    def __init__(self, subscribe_warrants, quote_ctx, is_open_csv_logger=False):
+    def get_lot_size(self,stock):
+        for cache in self.caches:
+            if cache['code'] == stock:
+                return cache['lot_size']
+
+    def __init__(self, subscribe_warrants, quote_ctx, caches, is_open_csv_logger=False):
         CurKlineHandlerBase.__init__(self)
         self.quote_ctx = quote_ctx
         self.subscribe_warrants = subscribe_warrants
@@ -112,9 +117,9 @@ class CurKlineCallback(CurKlineHandlerBase):
         self.is_stop = False
         self.futu_sqlite = None
         self.is_open_csv_logger = is_open_csv_logger
+        self.caches = caches
 
         self.buyer = smart_buy_and_sell.SimpleBuyAndSell(quote_ctx)
-
         if self.is_open_csv_logger:
             self.logger = open("res%s.csv" % datetime.now().strftime('%H%M%S'), "w", newline='')
             self.logger_writer = csv.DictWriter(logger,
@@ -201,7 +206,7 @@ class CurKlineCallback(CurKlineHandlerBase):
                                                                        str(subscribe_warrant["buy"]["name"]),
                                                                        subscribe_warrant["buy"]['stock'])
                     if self.call_dict[subscribe_warrant["buy"]["stock"]] <= 2:
-                        self.buyer.buy(subscribe_warrant["buy"]['stock'],subscribe_warrant["buy"]["lot_size"],0.05)
+                        self.buyer.buy(subscribe_warrant["buy"]['stock'],subscribe_warrant["buy"]["lot_size"],subscribe_warrant["type"],0.05)
                     print("** "+log)
                     send_weixin("** "+log)
                     os.system("say " + log)
@@ -219,12 +224,18 @@ class CurKlineCallback(CurKlineHandlerBase):
                 ##卖涡轮
                 self.buyer.sell(subscribe_warrant["buy"]['stock'])
                 ##买正股票
-                self.buyer.buy(cur_code, percentage=0.1)
+                self.buyer.buy(cur_code, self.get_lot_size(cur_code),"normal",percentage=0.1)
+
                 send_weixin("** " + log)
                 os.system("say " + log)
                 self.is_stop = True
         else:
             self.call_dict.pop(subscribe_warrant["buy"]["stock"], None)
+            if cur_code in self.buyer.buy_records and self.buyer.buy_records[cur_code]["type"] == "normal":
+                ###差距大于零，且是正股票，卖出
+                if cur_kline["low"] - self.buyer.buy_records[cur_code]["buy_price"] > 0 and \
+                   (cur_kline["low"] - self.buyer.buy_records[cur_code]["buy_price"])/cur_kline["low"] > 0.02:
+                    self.buyer.sell(cur_code)
             if recover_price_radio < 0.01:
                 ret, ls = self.quote_ctx.get_market_snapshot([subscribe_warrant["buy"]["stock"], ])
                 try:
@@ -234,12 +245,16 @@ class CurKlineCallback(CurKlineHandlerBase):
         return RET_OK, data
 
 def looper(quote_ctx, focus):
+    sucess,data = quote_ctx.get_market_snapshot(focus)
+    cache_records = data.to_dict("records")
+    print(cache_records)
+
     res = get_subscribe_stock(quote_ctx, focus)
     re_focus = list(res.keys())
     print("完整结果", res)
     print("需要关注的正股", re_focus)
     send_weixin("begin:" + str(re_focus), "Subscribe")
-    callback = CurKlineCallback(res, quote_ctx)
+    callback = CurKlineCallback(res, quote_ctx, cache_records)
     print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback))
 
     while True:

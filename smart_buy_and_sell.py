@@ -22,7 +22,7 @@ class SimpleBuyAndSell(object):
         """
         self.quote_ctx = quote_ctx
         self.context_setting()
-        self.qty_dicts = {}
+        self.buy_records = {}
 
     def close(self):
         self.quote_ctx.close()
@@ -96,11 +96,12 @@ class SimpleBuyAndSell(object):
         if ret_code == ft.RET_OK:
             print('stop_loss MAKE SELL ORDER\n\tcode = {} price = {} quantity = {}'
                   .format(stock, cur_price, cur_pos))
+            self.buy_records.pop(stock)
         else:
             print('stop_loss: MAKE SELL ORDER FAILURE: {}'.format(ret_data))
         self.quote_ctx.unsubscribe([stock], [ft.SubType.ORDER_BOOK])
 
-    def buy(self, stock, lot_size=0, percentage=0.1):
+    def buy(self, stock, lot_size, stock_type, percentage=0.1):
         self.quote_ctx.subscribe([stock], [ft.SubType.ORDER_BOOK], subscribe_push=False)
         trade_ctx = None
         if 'HK.' in stock:
@@ -145,6 +146,9 @@ class SimpleBuyAndSell(object):
         else:
             print('stop_loss: MAKE BUY ORDER FAILURE: {}'.format(ret_data))
             print('qty',qty)
+            if stock not in self.buy_records.keys():
+                self.buy_records[stock] = {"buy_price":cur_price,"type":stock_type}
+
 
 
 if __name__ == "__main__":

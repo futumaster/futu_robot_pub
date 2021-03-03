@@ -269,7 +269,7 @@ def looper(quote_ctx, focus):
             print("完整结果", res)
             print("需要关注的正股", re_focus)
             send_weixin("begin:" + str(re_focus), "Subscribe")
-            callback = CurKlineCallback(res, quote_ctx)
+            callback = CurKlineCallback(res, quote_ctx, cache_records)
             print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback))
 
 

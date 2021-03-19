@@ -104,7 +104,7 @@ class SimpleBuyAndSell(object):
         except:
             print('卖出失败',stock)
 
-    def buy(self, stock, lot_size, stock_type, percentage=0.1):
+    def buy(self, stock, lot_size, stock_type, percentage=0.05):
         try:
             self.quote_ctx.subscribe([stock], [ft.SubType.ORDER_BOOK], subscribe_push=False)
             trade_ctx = None
@@ -134,8 +134,9 @@ class SimpleBuyAndSell(object):
 
             cash = acc_info['power'][0]*percentage  # 购买力
             qty = int(math.floor(cash / cur_price))
+            print("cash:",cash,"cur_price",cur_price)
             qty = qty // lot_size * lot_size
-
+            print("qty:", qty, "lot_size", lot_size)
             ret_code, ret_data = trade_ctx.place_order(
                 price=cur_price,
                 qty=qty,

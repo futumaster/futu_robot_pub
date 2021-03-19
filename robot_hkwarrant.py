@@ -2,6 +2,7 @@
 ##TODO 20210220： 早上开盘的时候的波幅是完全不同的，需要验证策略，如果前15分钟往上杀，往下杀，可以考虑自动买入
 ##TODO 20210222:  如果发现连续下挫kill牛，有没有可能走买正股的方式， 加了，但是还是不对，会报错，数量不对
 ##TODO 20210226： snapshot请求次数过多
+##TODO 20210308： 如果杀了一个涡轮，那么要看看下一阶段是不是马上接上，里面小于4%，是的话，就可以打小一点的价格，也影响正股票的反向买入
 import time,sys
 from futu import *
 import csv
@@ -336,6 +337,15 @@ k线回调  {'code': 'HK.00388', 'time_key': '2020-11-30 14:46:00', 'open': 381.
 BULL 回收价相距 0.0369565217391305 368.0 381.6
 k线回调  {'code': 'HK.01299', 'time_key': '2020-11-30 14:46:00', 'open': 86.1, 'close': 86.1, 'high': 86.1, 'low': 86.05, 'volume': 25000, 'turnover': 2152490.0, 'k_type': 'K_1M', 'last_close': 0.0}
 BULL 回收价相距 0.0367469879518072 83.0 86.05"""
+
+"""
+反注册全部callback
+没买进 HK.53058
+{'code': 'HK.800700', 'svr_recv_time_bid': '', 'svr_recv_time_ask': '', 'Bid': [(0.0, 0, 0, {})], 'Ask': [(0.0, 0, 0, {})]}
+买入失败 HK.800700
+/Users/victorhuang/PycharmProjects/futu_robot_pub/smart_buy_and_sell.py:136: RuntimeWarning: divide by zero encountered in double_scalars
+  qty = int(math.floor(cash / cur_price))
+"""
 
 #打开这些正股的报价监听
 

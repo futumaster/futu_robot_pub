@@ -101,7 +101,7 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
 def subscribe_stock(quote_ctx, focus, callback):
     quote_ctx.set_handler(callback)  # 设置实时报价回调
     res = quote_ctx.subscribe(focus, [SubType.K_1M])
-    #quote_ctx.subscribe(focus, [SubType.ORDER_BOOK], subscribe_push=False)
+    quote_ctx.subscribe(focus, [SubType.ORDER_BOOK], subscribe_push=False)
     return res
 
 class CurKlineCallback(CurKlineHandlerBase):
@@ -170,6 +170,14 @@ class CurKlineCallback(CurKlineHandlerBase):
                                          'buyprice': buy_price,
                                          'buysocket': subscribe_warrant["buy"]["stock"]})
 
+    def count_recover_price_hardnum(self, order_books, recover_price):
+        founded = False
+        for order_book in order_books:
+            if order_book == recover_price:
+                founded = True
+
+
+
     def on_recv_rsp(self, rsp_str):
         if not self.futu_sqlite:
             self.futu_sqlite = FutuSqlite.FutuSqlite()
@@ -185,6 +193,14 @@ class CurKlineCallback(CurKlineHandlerBase):
         cur_code = cur_kline["code"]
         if cur_code not in self.subscribe_warrants:
             return
+        ret, order_book = self.quote_ctx.get_order_book(cur_code, num=10)
+        if ret != RET_OK:
+            print("CurKlineTest: error, msg: %s" % order_book)
+        """
+        委托价格，委托数量，委托订单数
+        'Bid': [(50.9, 180000, 54, {}), (50.85, 266500, 49, {}), (50.8, 637500, 124, {}), (50.75, 115500, 23, {}), (50.7, 286000, 37, {}), (50.65, 200000, 31, {}), (50.6, 1625500, 106, {}), (50.55, 136000, 46, {}), (50.5, 675500, 329, {}), (50.45, 35500, 14, {})], 'Ask': [(50.95, 275000, 31, {}), (51.0, 932000, 59, {}), (51.05, 222500, 31, {}), (51.1, 90500, 8, {}), (51.15, 95000, 15, {}), (51.2, 171000, 35, {}), (51.25, 118500, 28, {}), (51.3, 202500, 43, {}), (51.35, 97000, 10, {}), (51.4, 72000, 14, {})]}
+        """
+        print("orderbook",order_book)
 
         subscribe_warrant = self.subscribe_warrants[cur_code]
         recover_price_radio = 1.0
@@ -192,6 +208,7 @@ class CurKlineCallback(CurKlineHandlerBase):
             #如果被杀的是熊，则用回收价-最高价值
             recover_price_radio = float(subscribe_warrant["recovery_price"] - cur_kline["high"])/float(subscribe_warrant["recovery_price"])
             #print("BEAR 回收价相距", recover_price_radio, subscribe_warrant["recovery_price"], cur_kline["high"])
+
         else:
             recover_price_radio = float(cur_kline["low"] - subscribe_warrant["recovery_price"]) / float(
                 subscribe_warrant["recovery_price"])

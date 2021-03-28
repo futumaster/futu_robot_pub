@@ -95,9 +95,9 @@ class FutuSqlite:
 
         consq.close()
 
-    def insert_ai_data(self,stock,open,close,high,low,volumn,turnover,recover_price,recover_price_radio,recover_stock,street_rate,street_vol,type,is_buy,buy_price,buy_stock):
+    def insert_ai_data(self,stock,open,close,high,low,volumn,turnover,recover_price,recover_price_radio,recover_stock,street_rate,street_vol,type,is_buy,buy_price,buy_stock, order_vol_percent, order_vol):
         insert_sql = """
-        INSERT INTO ai_history (TIME_DAY,STOCK,OPEN_PRICE,CLOSE_PRICE,HIGH,LOW,VOLUMN,TURNOVER,RECOVER_PRICE,RECOVER_PRICE_RADIO,RECOVER_STOCK,STREET_RATE,STREET_VOL,TYPE,IS_BUY,BUY_PRICE,BUY_STOCK) VALUES (
+        INSERT INTO ai_history (TIME_DAY,STOCK,OPEN_PRICE,CLOSE_PRICE,HIGH,LOW,VOLUMN,TURNOVER,RECOVER_PRICE,RECOVER_PRICE_RADIO,RECOVER_STOCK,STREET_RATE,STREET_VOL,TYPE,IS_BUY,BUY_PRICE,BUY_STOCK,ORDER_VOL_PERCENT,ORDER_VOL) VALUES (
           '%s',
           '%s',
           '%s',
@@ -114,9 +114,11 @@ class FutuSqlite:
           '%s',
           '%s',
           '%s',
-          '%s'
+          '%s',
+          '%s',
+          '%s',
         ); 
-        """%(datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S"),stock,open,close,high,low,volumn,turnover,recover_price,recover_price_radio,recover_stock,street_rate,street_vol,type,is_buy,buy_price,buy_stock)
+        """%(datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S"),stock,open,close,high,low,volumn,turnover,recover_price,recover_price_radio,recover_stock,street_rate,street_vol,type,is_buy,buy_price,buy_stock,order_vol_percent,order_vol)
         self.cursor.execute(insert_sql)
         self.conn.commit()
 

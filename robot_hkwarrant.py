@@ -11,6 +11,7 @@ import FutuSqlite
 import requests
 import smart_buy_and_sell
 from subprocess import call
+import computer_util
 
 def send_weixin(title=None,text=None):
     if "Darwin" in platform.platform():
@@ -41,6 +42,7 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
     # 选出有街货大于x%，接近x%回收价的正股与伴生反向操作涡轮，回收价位，正股做key
     res = {}
     remove_sockets = []
+    buy_warrents = []
     for stock_num in stocks:
         req = WarrantRequest()
         req.sort_field = SortField.RECOVERY_PRICE
@@ -87,6 +89,7 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
                         res[stock_num]["buy"] = highscore_warrants[-1]
                     else:
                         res[stock_num]["buy"] = warrant_data_list.to_dict("records")[-1]
+                    buy_warrents.append(res[stock_num]["buy"])
                 else:
                     print(ret,ls)
             else:
@@ -96,12 +99,12 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
     #if remove_sockets:
     #    quote_ctx.modify_user_security("focus", ModifyUserSecurityOp.DEL, remove_sockets)
 
-    return res
+    return res,buy_warrents
 
-def subscribe_stock(quote_ctx, focus, callback):
+def subscribe_stock(quote_ctx, focus, callback, buy_warrents):
     quote_ctx.set_handler(callback)  # 设置实时报价回调
     res = quote_ctx.subscribe(focus, [SubType.K_1M])
-    quote_ctx.subscribe(focus, [SubType.ORDER_BOOK], subscribe_push=False)
+    quote_ctx.subscribe(focus+buy_warrents, [SubType.ORDER_BOOK], subscribe_push=False)
     return res
 
 class CurKlineCallback(CurKlineHandlerBase):
@@ -134,7 +137,7 @@ class CurKlineCallback(CurKlineHandlerBase):
     def state(self):
         return self.is_stop
 
-    def real_log(self, cur_code, recover_price_radio, is_buy, buy_price, cur_kline, subscribe_warrant):
+    def real_log(self, cur_code, recover_price_radio, is_buy, buy_price, cur_kline, subscribe_warrant,order_vol_percent,order_vol):
         self.futu_sqlite.insert_ai_data(
             cur_code,
             cur_kline['open'],
@@ -151,7 +154,9 @@ class CurKlineCallback(CurKlineHandlerBase):
             subscribe_warrant["type"],
             is_buy,
             buy_price,
-            subscribe_warrant["buy"]["stock"]
+            subscribe_warrant["buy"]["stock"],
+            order_vol_percent,
+            order_vol
         )
         if self.is_open_csv_logger:
             self.logger_writer.writerow({'stock': cur_code,
@@ -171,6 +176,9 @@ class CurKlineCallback(CurKlineHandlerBase):
                                          'buysocket': subscribe_warrant["buy"]["stock"]})
 
     def on_recv_rsp(self, rsp_str):
+        ###初始化
+        recover_price_radio = 1.0
+        order_vol_percent, total_volumn, order_vol = 0,0,0
         if not self.futu_sqlite:
             self.futu_sqlite = FutuSqlite.FutuSqlite()
 
@@ -178,37 +186,34 @@ class CurKlineCallback(CurKlineHandlerBase):
         if ret_code != RET_OK:
             print("CurKlineTest: error, msg: %s" % data)
             return RET_ERROR, data
-        #time_key   open  close   high    low  volume    turnover k_type  last_close
-        #        0  HK.00700  2020-04-01 15:55:00  375.2  375.4  375.4  375.2   39000  14639140.0   K_1M         0.0
+
         cur_kline = data.to_dict("records")[0]
-        #print("k线回调 ", cur_kline) # CurKlineTest自己的处理逻辑
         cur_code = cur_kline["code"]
         if cur_code not in self.subscribe_warrants:
+            print("没有要回收的涡轮 for",cur_code)
             return
-        ret, order_book = self.quote_ctx.get_order_book(cur_code, num=10)
+
+        ret, cur_order_book = self.quote_ctx.get_order_book(cur_code, num=10)
         if ret != RET_OK:
-            print("CurKlineTest: error, msg: %s" % order_book)
-        """
-        委托价格，委托数量，委托订单数
-        买家Bid 从大到小
-        卖家Ask 从小到大
-        'Bid': [(50.9, 180000, 54, {}), (50.85, 266500, 49, {}), (50.8, 637500, 124, {}), (50.75, 115500, 23, {}), (50.7, 286000, 37, {}), (50.65, 200000, 31, {}), (50.6, 1625500, 106, {}), (50.55, 136000, 46, {}), (50.5, 675500, 329, {}), (50.45, 35500, 14, {})], 'Ask': [(50.95, 275000, 31, {}), (51.0, 932000, 59, {}), (51.05, 222500, 31, {}), (51.1, 90500, 8, {}), (51.15, 95000, 15, {}), (51.2, 171000, 35, {}), (51.25, 118500, 28, {}), (51.3, 202500, 43, {}), (51.35, 97000, 10, {}), (51.4, 72000, 14, {})]}
-        """
-        ##print("orderbook",order_book)
+            print("CurKlineTest: error, msg: %s" % cur_order_book)
 
         subscribe_warrant = self.subscribe_warrants[cur_code]
-        recover_price_radio = 1.0
         if subscribe_warrant["type"] == "BEAR":
             #如果被杀的是熊，则用回收价-最高价值
             recover_price_radio = float(subscribe_warrant["recovery_price"] - cur_kline["high"])/float(subscribe_warrant["recovery_price"])
             #print("BEAR 回收价相距", recover_price_radio, subscribe_warrant["recovery_price"], cur_kline["high"])
-
+            order_book = cur_order_book["Ask"]
+            order_vol_percent, total_volumn, order_vol = computer_util.count_recover_price_hardnum(order_book,subscribe_warrant["recovery_price"])
         else:
             recover_price_radio = float(cur_kline["low"] - subscribe_warrant["recovery_price"]) / float(
                 subscribe_warrant["recovery_price"])
-            #print("BULL 回收价相距", recover_price_radio, subscribe_warrant["recovery_price"], cur_kline["low"])
+            order_book = cur_order_book["Bid"]
+            order_vol_percent, total_volumn, order_vol = computer_util.count_recover_price_hardnum(order_book, subscribe_warrant["recovery_price"])
+
+        ###距离回收价0.5%
         if recover_price_radio < 0.005:
-            ##buy bull
+            """
+            ###判断是否已经进入过0.5%
             if subscribe_warrant["buy"]["stock"] in self.call_dict.keys():
                 self.call_dict[subscribe_warrant["buy"]["stock"]] = self.call_dict[subscribe_warrant["buy"]["stock"]] + 1
                 if self.call_dict[subscribe_warrant["buy"]["stock"]] < 3:
@@ -221,16 +226,19 @@ class CurKlineCallback(CurKlineHandlerBase):
                         self.buyer.buy(subscribe_warrant["buy"]['stock'],subscribe_warrant["buy"]["lot_size"],subscribe_warrant["type"],0.05)
                     print("** "+log)
                     send_weixin("** "+log)
-                    os.system("say " + log)
-            else:
-                ret, ls = self.quote_ctx.get_market_snapshot([subscribe_warrant["buy"]["stock"], ])
-                print(ret)
-                if ret == 0:
-                    self.real_log(cur_code, recover_price_radio, 'true',ls.to_dict("records")[0]['last_price'],cur_kline, subscribe_warrant)
+                    os.system("say " + log)"""
+            if subscribe_warrant["buy"]["stock"] not in self.call_dict.keys():
+                ret, ls_data = self.quote_ctx.get_order_book(subscribe_warrant["buy"]["stock"], num=1)
+                if ret == RET_OK:
+                    self.real_log(cur_code, recover_price_radio, 'true',ls_data['Bid'][0][0],cur_kline, subscribe_warrant, order_vol_percent, order_vol)
                     send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%round(float(recover_price_radio*100),3))
+                    self.buyer.buy(subscribe_warrant["buy"]['stock'], subscribe_warrant["buy"]["lot_size"],
+                                   subscribe_warrant["type"], 0.05)
                     self.call_dict[subscribe_warrant["buy"]["stock"]] = 1
                 else:
+                    print("获取snapshot错误, 休息10s",ls_data)
                     time.sleep(10)
+
             if recover_price_radio <= 0:
                 log = "%s触发%s回收价"%(cur_code, str(subscribe_warrant["recovery_price"]))
                 ##卖涡轮
@@ -246,12 +254,12 @@ class CurKlineCallback(CurKlineHandlerBase):
             if cur_code in self.buyer.buy_records and self.buyer.buy_records[cur_code]["type"] == "normal":
                 ###差距大于零，且是正股票，卖出
                 if cur_kline["low"] - self.buyer.buy_records[cur_code]["buy_price"] > 0 and \
-                   (cur_kline["low"] - self.buyer.buy_records[cur_code]["buy_price"])/cur_kline["low"] > 0.02:
+                   (cur_kline["low"] - self.buyer.buy_records[cur_code]["buy_price"])/cur_kline["low"] > 0.01:
                     self.buyer.sell(cur_code)
-            if recover_price_radio < 0.01:
-                ret, ls = self.quote_ctx.get_market_snapshot([subscribe_warrant["buy"]["stock"], ])
+            if recover_price_radio < 0.05:
+                ret, ls_data = self.quote_ctx.get_order_book(subscribe_warrant["buy"]["stock"], num=1)
                 try:
-                    self.real_log(cur_code, recover_price_radio, 'false',ls.to_dict("records")[0]['last_price'],cur_kline, subscribe_warrant)
+                    self.real_log(cur_code, recover_price_radio, 'false',ls_data['Bid'][0][0],cur_kline, subscribe_warrant, order_vol_percent, order_vol)
                 except:
                     pass
         return RET_OK, data
@@ -261,13 +269,13 @@ def looper(quote_ctx, focus):
     cache_records = data.to_dict("records")
     print(cache_records)
 
-    res = get_subscribe_stock(quote_ctx, focus)
+    res,buy_warrents = get_subscribe_stock(quote_ctx, focus)
     re_focus = list(res.keys())
     print("完整结果", res)
     print("需要关注的正股", re_focus)
     send_weixin("begin:" + str(re_focus), "Subscribe")
     callback = CurKlineCallback(res, quote_ctx, cache_records)
-    print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback))
+    print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback,buy_warrents))
 
     while True:
         time.sleep(20)
@@ -276,13 +284,13 @@ def looper(quote_ctx, focus):
             os.system("say 反注册Callback")
             quote_ctx.unsubscribe_all()
             time.sleep(5)
-            res = get_subscribe_stock(quote_ctx, focus)
+            res,buy_warrents = get_subscribe_stock(quote_ctx, focus)
             re_focus = list(res.keys())
             print("完整结果", res)
             print("需要关注的正股", re_focus)
             send_weixin("begin:" + str(re_focus), "Subscribe")
             callback = CurKlineCallback(res, quote_ctx, cache_records)
-            print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback))
+            print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback,buy_warrents))
 
 #time.sleep(11*60*60-40*60)
 quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)

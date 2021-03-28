@@ -87,43 +87,51 @@
       <Position>18</Position>
       <DataType>varchar(20)|0s</DataType>
     </column>
-    <key id="27" parent="6">
+    <column id="27" parent="6" name="ORDER_VOL_PERCENT">
+      <Position>19</Position>
+      <DataType>FLOAT|0s</DataType>
+    </column>
+    <column id="28" parent="6" name="ORDER_VOL">
+      <Position>20</Position>
+      <DataType>BIGINT|0s</DataType>
+    </column>
+    <key id="29" parent="6">
       <ColNames>ID</ColNames>
       <Primary>1</Primary>
     </key>
-    <column id="28" parent="7" name="ID">
+    <column id="30" parent="7" name="ID">
       <Position>1</Position>
       <DataType>integer|0s</DataType>
     </column>
-    <column id="29" parent="7" name="Name">
+    <column id="31" parent="7" name="Name">
       <Position>2</Position>
       <DataType>varchar(20)|0s</DataType>
     </column>
-    <column id="30" parent="7" name="Hint">
+    <column id="32" parent="7" name="Hint">
       <Position>3</Position>
       <DataType>text|0s</DataType>
     </column>
-    <key id="31" parent="7">
+    <key id="33" parent="7">
       <ColNames>ID</ColNames>
       <Primary>1</Primary>
     </key>
-    <column id="32" parent="8" name="type">
+    <column id="34" parent="8" name="type">
       <Position>1</Position>
       <DataType>text|0s</DataType>
     </column>
-    <column id="33" parent="8" name="name">
+    <column id="35" parent="8" name="name">
       <Position>2</Position>
       <DataType>text|0s</DataType>
     </column>
-    <column id="34" parent="8" name="tbl_name">
+    <column id="36" parent="8" name="tbl_name">
       <Position>3</Position>
       <DataType>text|0s</DataType>
     </column>
-    <column id="35" parent="8" name="rootpage">
+    <column id="37" parent="8" name="rootpage">
       <Position>4</Position>
       <DataType>int|0s</DataType>
     </column>
-    <column id="36" parent="8" name="sql">
+    <column id="38" parent="8" name="sql">
       <Position>5</Position>
       <DataType>text|0s</DataType>
     </column>

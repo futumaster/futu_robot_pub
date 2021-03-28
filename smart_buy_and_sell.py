@@ -100,13 +100,13 @@ class SimpleBuyAndSell(object):
                 self.buy_records.pop(stock, None)
             else:
                 print('stop_loss: MAKE SELL ORDER FAILURE: {}'.format(ret_data))
-            self.quote_ctx.unsubscribe([stock], [ft.SubType.ORDER_BOOK])
+            ##self.quote_ctx.unsubscribe([stock], [ft.SubType.ORDER_BOOK])
         except:
             print('卖出失败',stock)
 
     def buy(self, stock, lot_size, stock_type, percentage=0.05):
         try:
-            self.quote_ctx.subscribe([stock], [ft.SubType.ORDER_BOOK], subscribe_push=False)
+            #self.quote_ctx.subscribe([stock], [ft.SubType.ORDER_BOOK], subscribe_push=False)
             trade_ctx = None
             if 'HK.' in stock:
                 trade_ctx = self.hk_trade_ctx

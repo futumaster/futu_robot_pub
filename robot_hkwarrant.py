@@ -170,14 +170,6 @@ class CurKlineCallback(CurKlineHandlerBase):
                                          'buyprice': buy_price,
                                          'buysocket': subscribe_warrant["buy"]["stock"]})
 
-    def count_recover_price_hardnum(self, order_books, recover_price):
-        founded = False
-        for order_book in order_books:
-            if order_book == recover_price:
-                founded = True
-
-
-
     def on_recv_rsp(self, rsp_str):
         if not self.futu_sqlite:
             self.futu_sqlite = FutuSqlite.FutuSqlite()
@@ -198,9 +190,11 @@ class CurKlineCallback(CurKlineHandlerBase):
             print("CurKlineTest: error, msg: %s" % order_book)
         """
         委托价格，委托数量，委托订单数
+        买家Bid 从大到小
+        卖家Ask 从小到大
         'Bid': [(50.9, 180000, 54, {}), (50.85, 266500, 49, {}), (50.8, 637500, 124, {}), (50.75, 115500, 23, {}), (50.7, 286000, 37, {}), (50.65, 200000, 31, {}), (50.6, 1625500, 106, {}), (50.55, 136000, 46, {}), (50.5, 675500, 329, {}), (50.45, 35500, 14, {})], 'Ask': [(50.95, 275000, 31, {}), (51.0, 932000, 59, {}), (51.05, 222500, 31, {}), (51.1, 90500, 8, {}), (51.15, 95000, 15, {}), (51.2, 171000, 35, {}), (51.25, 118500, 28, {}), (51.3, 202500, 43, {}), (51.35, 97000, 10, {}), (51.4, 72000, 14, {})]}
         """
-        print("orderbook",order_book)
+        ##print("orderbook",order_book)
 
         subscribe_warrant = self.subscribe_warrants[cur_code]
         recover_price_radio = 1.0
@@ -290,16 +284,12 @@ def looper(quote_ctx, focus):
             callback = CurKlineCallback(res, quote_ctx, cache_records)
             print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback))
 
-
 #time.sleep(11*60*60-40*60)
 quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
 focus = get_focus_stock(quote_ctx)
-
 looper(quote_ctx, focus)
-
-
-
 send_weixin("done","done")
+
 """******** 购买熊: {'stock': 'HK.68926', 'name': '美团高盛一七熊K.P', 'stock_owner': 'HK.03690', 'type': 'BEAR', 'issuer': 'GS', 'maturity_time': '2021-07-30', 'list_time': '2020-11-30', 'last_trade_time': '2021-07-29', 'recovery_price': 310.88, 'conversion_ratio': 500.0, 'lot_size': 5000, 'strike_price': 313.88, 'last_close_price': 0.04, 'cur_price': 0.04, 'price_change_val': 0.0, 'change_rate': 0.0, 'status': 'NORMAL', 'bid_price': 0.04, 'ask_price': 0.042, 'bid_vol': 15000000, 'ask_vol': 15000000, 'volume': 34480000, 'turnover': 1301545.0, 'score': 72.764, 'premium': 1.183, 'break_even_point': 293.88, 'leverage': 14.87, 'ipop': 5.25, 'price_recovery_ratio': -4.336078229541951, 'conversion_price': 20.0, 'street_rate': 0.0, 'street_vol': 0, 'amplitude': 0.0, 'issue_size': 100000000, 'high_price': 0.042, 'low_price': 0.029, 'implied_volatility': nan, 'delta': nan, 'effective_leverage': 14.87, 'list_timestamp': 1606665600.0, 'last_trade_timestamp': 1627488000.0, 'maturity_timestamp': 1627574400.0, 'upper_strike_price': nan, 'lower_strike_price': nan, 'inline_price_status': nan}
 k线回调  {'code': 'HK.00941', 'time_key': '2020-11-30 14:46:00', 'open': 46.65, 'close': 46.7, 'high': 46.7, 'low': 46.65, 'volume': 4000, 'turnover': 186725.0, 'k_type': 'K_1M', 'last_close': 0.0}
 BULL 回收价相距 0.02123467600700523 45.68 46.65

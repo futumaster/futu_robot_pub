@@ -71,9 +71,13 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
                 req1 = WarrantRequest()
                 req1.sort_field = SortField.VOLUME
                 if warrant_data_list["type"][0] == "BEAR":
-                    req1.type_list = [WrtType.BULL, WrtType.CALL]
+                    req1.type_list = [WrtType.BULL, ]
+                    req1.price_recovery_ratio_min = 5
+                    req1.price_recovery_ratio_max = 10
                 else:
-                    req1.type_list = [WrtType.BEAR, WrtType.PUT]
+                    req1.type_list = [WrtType.BEAR, ]
+                    req1.price_recovery_ratio_max = -5
+                    req1.price_recovery_ratio_min = -10
                 req1.street_max = 1
                 time_min = datetime.now() + timedelta(120)
                 req1.maturity_timemin = time_min.strftime("%Y-%m-%d")
@@ -84,12 +88,13 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
                     ##TODO：计算敏感度  正股最低买卖价位 x 对冲值delta(对冲值，仅认购认沽支持此字段) / 兌换比率（conversion_ratio） x 窝轮最低买卖价位
                     highscore_warrants = warrant_data_list.loc[
                         warrant_data_list["score"] > 70].to_dict("records")
-                    print("获取高分的窝轮:", highscore_warrants)
+
                     if len(highscore_warrants) > 0:
                         res[stock_num]["buy"] = highscore_warrants[-1]
                     else:
                         res[stock_num]["buy"] = warrant_data_list.to_dict("records")[-1]
-                    buy_warrents.append(res[stock_num]["buy"])
+                    print("获取高分的窝轮:", res[stock_num]["buy"])
+                    buy_warrents.append(res[stock_num]["buy"]["stock"])
                 else:
                     print(ret,ls)
             else:
@@ -102,9 +107,9 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
     return res,buy_warrents
 
 def subscribe_stock(quote_ctx, focus, callback, buy_warrents):
+    quote_ctx.subscribe(focus+buy_warrents, [SubType.ORDER_BOOK], subscribe_push=False)
     quote_ctx.set_handler(callback)  # 设置实时报价回调
     res = quote_ctx.subscribe(focus, [SubType.K_1M])
-    quote_ctx.subscribe(focus+buy_warrents, [SubType.ORDER_BOOK], subscribe_push=False)
     return res
 
 class CurKlineCallback(CurKlineHandlerBase):
@@ -207,6 +212,7 @@ class CurKlineCallback(CurKlineHandlerBase):
         else:
             recover_price_radio = float(cur_kline["low"] - subscribe_warrant["recovery_price"]) / float(
                 subscribe_warrant["recovery_price"])
+            #print("or",cur_order_book)
             order_book = cur_order_book["Bid"]
             order_vol_percent, total_volumn, order_vol = computer_util.count_recover_price_hardnum(order_book, subscribe_warrant["recovery_price"])
 
@@ -256,12 +262,10 @@ class CurKlineCallback(CurKlineHandlerBase):
                 if cur_kline["low"] - self.buyer.buy_records[cur_code]["buy_price"] > 0 and \
                    (cur_kline["low"] - self.buyer.buy_records[cur_code]["buy_price"])/cur_kline["low"] > 0.01:
                     self.buyer.sell(cur_code)
-            if recover_price_radio < 0.05:
+            if recover_price_radio < 0.02:
                 ret, ls_data = self.quote_ctx.get_order_book(subscribe_warrant["buy"]["stock"], num=1)
-                try:
-                    self.real_log(cur_code, recover_price_radio, 'false',ls_data['Bid'][0][0],cur_kline, subscribe_warrant, order_vol_percent, order_vol)
-                except:
-                    pass
+                self.real_log(cur_code, recover_price_radio, 'false',ls_data['Bid'][0][0],cur_kline, subscribe_warrant, order_vol_percent, order_vol)
+
         return RET_OK, data
 
 def looper(quote_ctx, focus):

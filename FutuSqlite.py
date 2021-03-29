@@ -116,9 +116,10 @@ class FutuSqlite:
           '%s',
           '%s',
           '%s',
-          '%s',
+          '%s'
         ); 
-        """%(datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S"),stock,open,close,high,low,volumn,turnover,recover_price,recover_price_radio,recover_stock,street_rate,street_vol,type,is_buy,buy_price,buy_stock,order_vol_percent,order_vol)
+        """%(datetime.datetime.now(),stock,open,close,high,low,volumn,turnover,recover_price,recover_price_radio,recover_stock,street_rate,street_vol,type,is_buy,buy_price,buy_stock,order_vol_percent,order_vol)
+        #print("insert_sql",insert_sql)
         self.cursor.execute(insert_sql)
         self.conn.commit()
 

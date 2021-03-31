@@ -77,7 +77,7 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
                 else:
                     req1.type_list = [WrtType.BEAR, ]
                     req1.price_recovery_ratio_max = -5
-                    req1.price_recovery_ratio_min = -10
+                    req1.price_recovery_ratio_min = -12
                 req1.street_max = 1
                 time_min = datetime.now() + timedelta(120)
                 req1.maturity_timemin = time_min.strftime("%Y-%m-%d")

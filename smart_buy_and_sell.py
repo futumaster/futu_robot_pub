@@ -130,9 +130,14 @@ class SimpleBuyAndSell(object):
             if ret == ft.RET_OK:
                 print(data)
                 cur_price = data['Ask'][0][0]
+                if cur_price == 0.0:
+                    ret_code, snapshot = self.quote_ctx.get_market_snapshot([stock])
+                    if ret_code != 0:
+                        raise Exception('市场快照数据获取异常 {}'.format(snapshot))
+                    cur_price = snapshot["last_price"][0]
 
 
-            cash = acc_info['power'][0]*percentage  # 购买力
+            cash = acc_info['cash'][0]*percentage  # 购买力
             qty = int(math.floor(cash / cur_price))
             print("cash:",cash,"cur_price",cur_price)
             qty = qty // lot_size * lot_size

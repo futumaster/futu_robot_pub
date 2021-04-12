@@ -73,11 +73,11 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
                 if warrant_data_list["type"][0] == "BEAR":
                     req1.type_list = [WrtType.BULL, ]
                     req1.price_recovery_ratio_min = 5
-                    req1.price_recovery_ratio_max = 10
+                    req1.price_recovery_ratio_max = 15
                 else:
                     req1.type_list = [WrtType.BEAR, ]
                     req1.price_recovery_ratio_max = -5
-                    req1.price_recovery_ratio_min = -12
+                    req1.price_recovery_ratio_min = -15
                 req1.street_max = 1
                 time_min = datetime.now() + timedelta(120)
                 req1.maturity_timemin = time_min.strftime("%Y-%m-%d")
@@ -236,6 +236,13 @@ class CurKlineCallback(CurKlineHandlerBase):
             if subscribe_warrant["buy"]["stock"] not in self.call_dict.keys():
                 ret, ls_data = self.quote_ctx.get_order_book(subscribe_warrant["buy"]["stock"], num=1)
                 if ret == RET_OK:
+                    log = "距离%s,回收价%s,回收量%s,建议购买%s %s"%(str(round(float(recover_price_radio*100),3)),
+                                                                       str(subscribe_warrant["recovery_price"]),
+                                                                       str(subscribe_warrant["street_vol"]),
+                                                                       str(subscribe_warrant["buy"]["name"]),
+                                                                       subscribe_warrant["buy"]['stock'])
+                    print("**",log)
+
                     self.real_log(cur_code, recover_price_radio, 'true',ls_data['Bid'][0][0],cur_kline, subscribe_warrant, order_vol_percent, order_vol)
                     send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%round(float(recover_price_radio*100),3))
                     self.buyer.buy(subscribe_warrant["buy"]['stock'], subscribe_warrant["buy"]["lot_size"],

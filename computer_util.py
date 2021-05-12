@@ -15,6 +15,8 @@ def count_recover_price_hardnum(order_books, recover_price):
             re_total_order = order + re_total_order
         total_order = order + total_order
         total_volumn = volumn + total_volumn
+    if not re_total_volumn:
+        return 0,0,0
     return float(re_total_volumn) / float(total_volumn), total_volumn,  re_total_volumn
 
 

@@ -13,7 +13,13 @@ import smart_buy_and_sell
 from subprocess import call
 import computer_util
 
+def send_feishu(title=None,link=None):
+    cmd = """curl --header "Content-Type: application/json" --request POST --data '%s' https://www.feishu.cn/flow/api/trigger-webhook/a02be1e4229390baad907861213cd4c3"""
+    content = """{"events":[{"id":"%s","name":"%s"}]}"""%(link,title)
+    os.system(cmd%content)
+
 def send_weixin(title=None,text=None):
+    #send_feishu(title, "http://www.qq.com")
     if "Darwin" in platform.platform():
         cmd = 'display notification \"' + \
               "%s"%text + '\" with title \"%s\"'%title
@@ -55,14 +61,14 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
         ret, ls = quote_ctx.get_warrant(stock_owner=stock_num, req=req)
         time.sleep(0.3)
         if ret == RET_OK:  # 先判断接口返回是否正常，再取数据
-            warrant_data_list, last_page, all_count = ls
+            kill_warrant_data_list, last_page, all_count = ls
 
-            if len(warrant_data_list) > 0:
-                filter_warrant_list = warrant_data_list[
+            if len(kill_warrant_data_list) > 0:
+                filter_warrant_list = kill_warrant_data_list[
                     ["name", "stock", "recovery_price", "street_rate", "street_vol", "price_recovery_ratio","type"]].to_dict("records")
                 print(filter_warrant_list)
                 ##TODO:如果距离一样，或者相差不超过x，则街货的属性相加，选择最贴近的那个
-                if warrant_data_list["type"][0] == "BEAR":
+                if kill_warrant_data_list["type"][0] == "BEAR":
                     res[stock_num] = filter_warrant_list[0]
                 else:
                     res[stock_num] = filter_warrant_list[-1]
@@ -70,7 +76,7 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
 
                 req1 = WarrantRequest()
                 req1.sort_field = SortField.VOLUME
-                if warrant_data_list["type"][0] == "BEAR":
+                if kill_warrant_data_list["type"][0] == "BEAR":
                     req1.type_list = [WrtType.BULL, ]
                     req1.price_recovery_ratio_min = 5
                     req1.price_recovery_ratio_max = 15
@@ -92,7 +98,21 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
                     if len(highscore_warrants) > 0:
                         res[stock_num]["buy"] = highscore_warrants[-1]
                     else:
-                        res[stock_num]["buy"] = warrant_data_list.to_dict("records")[-1]
+                        if len(warrant_data_list.to_dict("records")) < 1:
+                            req2 = WarrantRequest()
+                            req2.sort_field = SortField.VOLUME
+                            if kill_warrant_data_list["type"][0] == "BEAR":
+                                req2.type_list = [WrtType.BULL, WrtType.CALL]
+                            else:
+                                req2.type_list = [WrtType.BEAR, WrtType.PUT]
+                            req2.street_max = 3
+                            req2.status = "NORMAL"
+                            ret1, ls1 = quote_ctx.get_warrant(stock_owner=stock_num, req=req2)
+                            if ret1 == RET_OK:
+                                warrant_data_list1, last_page1, all_count1 = ls1
+                                res[stock_num]["buy"] = warrant_data_list1.to_dict("records")[-1]
+                        else:
+                            res[stock_num]["buy"] = warrant_data_list.to_dict("records")[-1]
                     print("获取高分的窝轮:", res[stock_num]["buy"])
                     buy_warrents.append(res[stock_num]["buy"]["stock"])
                 else:
@@ -242,6 +262,7 @@ class CurKlineCallback(CurKlineHandlerBase):
                                                                        str(subscribe_warrant["buy"]["name"]),
                                                                        subscribe_warrant["buy"]['stock'])
                     print("**",log)
+                    send_feishu(log, "http://www.qq.com")
 
                     self.real_log(cur_code, recover_price_radio, 'true',ls_data['Bid'][0][0],cur_kline, subscribe_warrant, order_vol_percent, order_vol)
                     send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%round(float(recover_price_radio*100),3))

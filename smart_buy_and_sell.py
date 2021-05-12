@@ -40,6 +40,9 @@ class SimpleBuyAndSell(object):
         self.hk_trade_ctx = ft.OpenHKTradeContext(host=self.api_svr_ip, port=self.api_svr_port)
         self.us_trade_ctx = ft.OpenUSTradeContext(host=self.api_svr_ip, port=self.api_svr_port)
 
+        #print(self.hk_trade_ctx.get_acc_list())
+        #print(self.us_trade_ctx.get_acc_list())
+
         if self.trade_env == ft.TrdEnv.REAL:
             ret_code, ret_data = self.hk_trade_ctx.unlock_trade(
                 self.unlock_password)

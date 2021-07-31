@@ -281,7 +281,7 @@ class CurKlineCallback(CurKlineHandlerBase):
                 self.buyer.buy(cur_code, self.get_lot_size(cur_code),"normal",percentage=0.1)
 
                 send_weixin("** " + log)
-                os.system("say " + log)
+                #os.system("say " + log)
                 self.is_stop = True
         else:
             self.call_dict.pop(subscribe_warrant["buy"]["stock"], None)

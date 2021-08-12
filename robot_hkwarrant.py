@@ -12,6 +12,7 @@ import requests
 import smart_buy_and_sell
 from subprocess import call
 import computer_util
+import stock_timer
 
 def send_feishu(title=None,link=None):
     cmd = """curl --header "Content-Type: application/json" --request POST --data '%s' https://www.feishu.cn/flow/api/trigger-webhook/a02be1e4229390baad907861213cd4c3"""
@@ -126,9 +127,8 @@ def get_subscribe_stock(quote_ctx, stocks,street_min=8):
 
     return res,buy_warrents
 
-def subscribe_stock(quote_ctx, focus, callback, buy_warrents):
+def subscribe_stock(quote_ctx, focus, buy_warrents):
     quote_ctx.subscribe(focus+buy_warrents, [SubType.ORDER_BOOK], subscribe_push=False)
-    quote_ctx.set_handler(callback)  # 设置实时报价回调
     res = quote_ctx.subscribe(focus, [SubType.K_1M])
     return res
 
@@ -296,6 +296,30 @@ class CurKlineCallback(CurKlineHandlerBase):
 
         return RET_OK, data
 
+class SysNotifyTest(SysNotifyHandlerBase):
+    def on_recv_rsp(self, rsp_str):
+        ret_code, data = super(SysNotifyTest, self).on_recv_rsp(rsp_str)
+        notify_type, sub_type, msg = data
+        if ret_code != RET_OK:
+            logger.debug("SysNotifyTest: error, msg: {}".format(msg))
+            return RET_ERROR, data
+        if (notify_type == SysNotifyType.GTW_EVENT):  # FutuOpenD 事件通知
+            print("GTW_EVENT, type: {} msg: {}".format(sub_type, msg))
+        elif (notify_type == SysNotifyType.PROGRAM_STATUS):  # 程序状态变化通知
+            print("PROGRAM_STATUS, type: {} msg: {}".format(sub_type, msg))
+        elif (notify_type == SysNotifyType.CONN_STATUS):  ## 连接状态变化通知
+            print("CONN_STATUS, qot: {}".format(msg['qot_logined']))
+            print("CONN_STATUS, trd: {}".format(msg['trd_logined']))
+        elif (notify_type == SysNotifyType.QOT_RIGHT):  # 行情权限变化通知
+            print("QOT_RIGHT, hk: {}".format(msg['hk_qot_right']))
+            print("QOT_RIGHT, hk_option: {}".format(msg['hk_option_qot_right']))
+            print("QOT_RIGHT, hk_future: {}".format(msg['hk_future_qot_right']))
+            print("QOT_RIGHT, us: {}".format(msg['us_qot_right']))
+            print("QOT_RIGHT, us_option: {}".format(msg['us_option_qot_right']))
+            print("QOT_RIGHT, us_future: {}".format(msg['us_future_qot_right']))
+            print("QOT_RIGHT, cn: {}".format(msg['cn_qot_right']))
+        return RET_OK, data
+
 def looper(quote_ctx, focus):
     sucess,data = quote_ctx.get_market_snapshot(focus)
     cache_records = data.to_dict("records")
@@ -307,11 +331,19 @@ def looper(quote_ctx, focus):
     print("需要关注的正股", re_focus)
     send_weixin("begin:" + str(re_focus), "Subscribe")
     callback = CurKlineCallback(res, quote_ctx, cache_records)
-    print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback,buy_warrents))
+    syscallback = SysNotifyTest()
+    print("关注结果：", subscribe_stock(quote_ctx, re_focus, buy_warrents))
+    quote_ctx.set_handler(callback)  # 设置实时报价回调
+    quote_ctx.set_handler(syscallback)
 
     while True:
         time.sleep(20)
+        if callback.is_stop or stock_timer.need_stop():
+            print("looper",callback.is_stop, stock_timer.need_stop())
         if callback.is_stop:
+            if stock_timer.need_stop():
+                print("等待开市")
+                continue
             print("反注册全部callback")
             os.system("say 反注册Callback")
             quote_ctx.unsubscribe_all()
@@ -322,7 +354,10 @@ def looper(quote_ctx, focus):
             print("需要关注的正股", re_focus)
             send_weixin("begin:" + str(re_focus), "Subscribe")
             callback = CurKlineCallback(res, quote_ctx, cache_records)
-            print("关注结果：", subscribe_stock(quote_ctx, re_focus, callback,buy_warrents))
+            #syscallback = SysNotifyTest()
+            print("关注结果：", subscribe_stock(quote_ctx, re_focus, buy_warrents))
+            #quote_ctx.set_handler(callback)  # 设置实时报价回调
+            #quote_ctx.set_handler(syscallback)
 
 #time.sleep(11*60*60-40*60)
 quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)

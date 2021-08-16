@@ -107,7 +107,7 @@ def get_short_sell_socket(quote_ctx, socket_list):
             print('error:', data)
     return short_sell_sockets
 
-def get_short_socket(default_day = "20210318"):
+def get_short_socket(default_day = "202100812"):
     baseurl = "https://www.hkex.com.hk/-/media/HKEX-Market/Services/Trading/Securities/Securities-Lists/Designated-Securities-Eligible-for-Short-Selling/ds_list%s_c.csv?la=zh-HK"
     ###eg:20201223
     result = None

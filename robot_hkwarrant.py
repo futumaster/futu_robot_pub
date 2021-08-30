@@ -13,11 +13,8 @@ import smart_buy_and_sell
 from subprocess import call
 import computer_util
 import stock_timer
+import notification
 
-def send_feishu(title=None,link=None):
-    cmd = """curl --header "Content-Type: application/json" --request POST --data '%s' https://www.feishu.cn/flow/api/trigger-webhook/a02be1e4229390baad907861213cd4c3"""
-    content = """{"events":[{"id":"%s","name":"%s"}]}"""%(link,title)
-    os.system(cmd%content)
 
 def send_weixin(title=None,text=None):
     #send_feishu(title, "http://www.qq.com")
@@ -262,10 +259,10 @@ class CurKlineCallback(CurKlineHandlerBase):
                                                                        str(subscribe_warrant["buy"]["name"]),
                                                                        subscribe_warrant["buy"]['stock'])
                     print("**",log)
-                    send_feishu(log, "http://www.qq.com")
+                    notification.send_feishu(log, "http://www.qq.com")
 
                     self.real_log(cur_code, recover_price_radio, 'true',ls_data['Bid'][0][0],cur_kline, subscribe_warrant, order_vol_percent, order_vol)
-                    send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%round(float(recover_price_radio*100),3))
+                    #send_weixin("购买:"+subscribe_warrant["buy"]["stock"], "距离回收价: %f"%round(float(recover_price_radio*100),3))
                     self.buyer.buy(subscribe_warrant["buy"]['stock'], subscribe_warrant["buy"]["lot_size"],
                                    subscribe_warrant["type"], 0.05)
                     self.call_dict[subscribe_warrant["buy"]["stock"]] = 1
@@ -280,7 +277,7 @@ class CurKlineCallback(CurKlineHandlerBase):
                 ##买正股票
                 self.buyer.buy(cur_code, self.get_lot_size(cur_code),"normal",percentage=0.1)
 
-                send_weixin("** " + log)
+                #send_weixin("** " + log)
                 #os.system("say " + log)
                 self.is_stop = True
         else:
@@ -329,7 +326,7 @@ def looper(quote_ctx, focus):
     re_focus = list(res.keys())
     print("完整结果", res)
     print("需要关注的正股", re_focus)
-    send_weixin("begin:" + str(re_focus), "Subscribe")
+    #send_weixin("begin:" + str(re_focus), "Subscribe")
     callback = CurKlineCallback(res, quote_ctx, cache_records)
     syscallback = SysNotifyTest()
     print("关注结果：", subscribe_stock(quote_ctx, re_focus, buy_warrents))
@@ -352,7 +349,7 @@ def looper(quote_ctx, focus):
             re_focus = list(res.keys())
             print("完整结果", res)
             print("需要关注的正股", re_focus)
-            send_weixin("begin:" + str(re_focus), "Subscribe")
+            #send_weixin("begin:" + str(re_focus), "Subscribe")
             callback = CurKlineCallback(res, quote_ctx, cache_records)
             #syscallback = SysNotifyTest()
             print("关注结果：", subscribe_stock(quote_ctx, re_focus, buy_warrents))
@@ -361,9 +358,10 @@ def looper(quote_ctx, focus):
 
 #time.sleep(11*60*60-40*60)
 quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)
+stock_timer.wait_to_begin()
 focus = get_focus_stock(quote_ctx)
 looper(quote_ctx, focus)
-send_weixin("done","done")
+#send_weixin("done","done")
 
 """******** 购买熊: {'stock': 'HK.68926', 'name': '美团高盛一七熊K.P', 'stock_owner': 'HK.03690', 'type': 'BEAR', 'issuer': 'GS', 'maturity_time': '2021-07-30', 'list_time': '2020-11-30', 'last_trade_time': '2021-07-29', 'recovery_price': 310.88, 'conversion_ratio': 500.0, 'lot_size': 5000, 'strike_price': 313.88, 'last_close_price': 0.04, 'cur_price': 0.04, 'price_change_val': 0.0, 'change_rate': 0.0, 'status': 'NORMAL', 'bid_price': 0.04, 'ask_price': 0.042, 'bid_vol': 15000000, 'ask_vol': 15000000, 'volume': 34480000, 'turnover': 1301545.0, 'score': 72.764, 'premium': 1.183, 'break_even_point': 293.88, 'leverage': 14.87, 'ipop': 5.25, 'price_recovery_ratio': -4.336078229541951, 'conversion_price': 20.0, 'street_rate': 0.0, 'street_vol': 0, 'amplitude': 0.0, 'issue_size': 100000000, 'high_price': 0.042, 'low_price': 0.029, 'implied_volatility': nan, 'delta': nan, 'effective_leverage': 14.87, 'list_timestamp': 1606665600.0, 'last_trade_timestamp': 1627488000.0, 'maturity_timestamp': 1627574400.0, 'upper_strike_price': nan, 'lower_strike_price': nan, 'inline_price_status': nan}
 k线回调  {'code': 'HK.00941', 'time_key': '2020-11-30 14:46:00', 'open': 46.65, 'close': 46.7, 'high': 46.7, 'low': 46.65, 'volume': 4000, 'turnover': 186725.0, 'k_type': 'K_1M', 'last_close': 0.0}

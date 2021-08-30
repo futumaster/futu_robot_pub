@@ -1,4 +1,4 @@
-import datetime
+import datetime,time
 
 d_time1 = datetime.datetime.strptime(str(datetime.datetime.now().date())+'9:30', '%Y-%m-%d%H:%M')
 d_time2 = datetime.datetime.strptime(str(datetime.datetime.now().date())+'16:00', '%Y-%m-%d%H:%M')
@@ -10,6 +10,10 @@ def need_stop():
         return False
     return True
 
+def wait_to_begin():
+    while need_stop():
+        time.sleep(20)
+        print(datetime.datetime.now(),"等待开市")
 
 if __name__ == '__main__':
     print(need_stop())

@@ -12,4 +12,4 @@ def send_feishu(title=None,link=None):
     resp = requests.post(url, headers=headers, data=data)
     print(resp)
 
-send_feishu("ttt222tt","https://www.qq22.com")
+send_feishu("ttt22772tt","https://www.qq22.com")

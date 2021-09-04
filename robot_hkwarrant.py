@@ -277,7 +277,7 @@ class CurKlineCallback(CurKlineHandlerBase):
                 ##买正股票
                 self.buyer.buy(cur_code, self.get_lot_size(cur_code),"normal",percentage=0.1)
 
-                #send_weixin("** " + log)
+                notification.send_feishu("** " + log, "https://www.qq.com")
                 #os.system("say " + log)
                 self.is_stop = True
         else:
@@ -326,7 +326,7 @@ def looper(quote_ctx, focus):
     re_focus = list(res.keys())
     print("完整结果", res)
     print("需要关注的正股", re_focus)
-    #send_weixin("begin:" + str(re_focus), "Subscribe")
+    notification.send_feishu("begin:" + str(re_focus), "Subscribe")
     callback = CurKlineCallback(res, quote_ctx, cache_records)
     syscallback = SysNotifyTest()
     print("关注结果：", subscribe_stock(quote_ctx, re_focus, buy_warrents))
@@ -349,7 +349,7 @@ def looper(quote_ctx, focus):
             re_focus = list(res.keys())
             print("完整结果", res)
             print("需要关注的正股", re_focus)
-            #send_weixin("begin:" + str(re_focus), "Subscribe")
+            notification.send_feishu("begin:" + str(re_focus), "Subscribe")
             callback = CurKlineCallback(res, quote_ctx, cache_records)
             #syscallback = SysNotifyTest()
             print("关注结果：", subscribe_stock(quote_ctx, re_focus, buy_warrents))

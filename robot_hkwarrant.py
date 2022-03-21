@@ -7,7 +7,8 @@ import time,sys
 from futu import *
 import csv
 import platform
-import FutuSqlite
+import FutuMysql
+#import FutuSqlite
 import requests
 import smart_buy_and_sell
 from subprocess import call
@@ -144,6 +145,7 @@ class CurKlineCallback(CurKlineHandlerBase):
         self.futu_sqlite = None
         self.is_open_csv_logger = is_open_csv_logger
         self.caches = caches
+        self.trigelist = []
 
         self.buyer = smart_buy_and_sell.SimpleBuyAndSell(quote_ctx)
         if self.is_open_csv_logger:
@@ -202,7 +204,7 @@ class CurKlineCallback(CurKlineHandlerBase):
         recover_price_radio = 1.0
         order_vol_percent, total_volumn, order_vol = 0,0,0
         if not self.futu_sqlite:
-            self.futu_sqlite = FutuSqlite.FutuSqlite()
+            self.futu_sqlite = FutuMysql.FutuMysql()
 
         ret_code, data = super(CurKlineCallback,self).on_recv_rsp(rsp_str)
         if ret_code != RET_OK:
@@ -253,7 +255,7 @@ class CurKlineCallback(CurKlineHandlerBase):
             if subscribe_warrant["buy"]["stock"] not in self.call_dict.keys():
                 ret, ls_data = self.quote_ctx.get_order_book(subscribe_warrant["buy"]["stock"], num=1)
                 if ret == RET_OK:
-                    log = "距离%s,回收价%s,回收量%s,建议购买%s %s"%(str(round(float(recover_price_radio*100),3)),
+                    log = "dist%s,reprice%s,revol%s,suggestbuy%s %s"%(str(round(float(recover_price_radio*100),3)),
                                                                        str(subscribe_warrant["recovery_price"]),
                                                                        str(subscribe_warrant["street_vol"]),
                                                                        str(subscribe_warrant["buy"]["name"]),
@@ -271,14 +273,16 @@ class CurKlineCallback(CurKlineHandlerBase):
                     time.sleep(10)
 
             if recover_price_radio <= 0:
-                log = "%s触发%s回收价"%(cur_code, str(subscribe_warrant["recovery_price"]))
+                log = "%s trige %s reprice"%(cur_code, str(subscribe_warrant["recovery_price"]))
                 ##卖涡轮
-                self.buyer.sell(subscribe_warrant["buy"]['stock'])
-                ##买正股票
-                self.buyer.buy(cur_code, self.get_lot_size(cur_code),"normal",percentage=0.1)
+                if log not in self.trigelist:
+                    self.trigelist.append(log)
+                    self.buyer.sell(subscribe_warrant["buy"]['stock'])
+                    ##买正股票
+                    self.buyer.buy(cur_code, self.get_lot_size(cur_code),"normal",percentage=0.1)
 
-                notification.send_feishu("** " + log, "https://www.qq.com")
-                #os.system("say " + log)
+                    notification.send_feishu("** " + log, "https://www.qq.com")
+                    #os.system("say " + log)
                 self.is_stop = True
         else:
             self.call_dict.pop(subscribe_warrant["buy"]["stock"], None)
@@ -319,6 +323,7 @@ class SysNotifyTest(SysNotifyHandlerBase):
 
 def looper(quote_ctx, focus):
     sucess,data = quote_ctx.get_market_snapshot(focus)
+    print(sucess,data)
     cache_records = data.to_dict("records")
     print(cache_records)
 
@@ -389,7 +394,7 @@ BULL 回收价相距 0.011403508771929825 570.0 576.5
 k线回调  {'code': 'HK.00941', 'time_key': '2020-11-30 14:46:00', 'open': 46.65, 'close': 46.65, 'high': 46.7, 'low': 46.65, 'volume': 6500, 'turnover': 303350.0, 'k_type': 'K_1M', 'last_close': 0.0}
 BULL 回收价相距 0.02123467600700523 45.68 46.65
 k线回调  {'code': 'HK.00700', 'time_key': '2020-11-30 14:46:00', 'open': 576.5, 'close': 576.5, 'high': 577.0, 'low': 576.5, 'volume': 36900, 'turnover': 21274900.0, 'k_type': 'K_1M', 'last_close': 0.0}
-BULL 回收价相距 0.011403508771929825 570.0 576.5
+BULL 回收价相距 0.011403508771929825 570.0 576.5                         
 k线回调  {'code': 'HK.00941', 'time_key': '2020-11-30 14:46:00', 'open': 46.65, 'close': 46.7, 'high': 46.7, 'low': 46.65, 'volume': 8000, 'turnover': 373400.0, 'k_type': 'K_1M', 'last_close': 0.0}
 BULL 回收价相距 0.02123467600700523 45.68 46.65
 k线回调  {'code': 'HK.00700', 'time_key': '2020-11-30 14:46:00', 'open': 576.5, 'close': 576.5, 'high': 577.0, 'low': 576.5, 'volume': 37100, 'turnover': 21390200.0, 'k_type': 'K_1M', 'last_close': 0.0}

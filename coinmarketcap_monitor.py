@@ -84,7 +84,8 @@ while True:
     rows = fetch_and_parse(url)
 
     if compare_data(last_rows, rows):  # 检查是否有超过5%的变化
-        futu_sqlite.insert_coinmarketcap_data(str(rows[0][0]),str(rows[0][1]),str(rows[0][2]),str(rows[0][3]),str(rows[0][4]),str(rows[0][5]))
+        for row in rows:
+            futu_sqlite.insert_coinmarketcap_data(str(row[0]),str(row[1]),str(row[2]),str(row[3]),str(row[4]),str(row[5]))
         send_push_notification(
             rows[0][0] + " %.2f"%rows[0][-1] + "|" + rows[1][0] + " %.2f"%rows[1][-1] + "|" + rows[2][0] + " %.2f"%rows[2][-1],
             str(rows[0:5]))

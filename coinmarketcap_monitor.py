@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import csv
 import time,json
 import datetime,glob,os
+import FutuMysql
 
 
 def fetch_and_parse(url):
@@ -25,9 +26,11 @@ def fetch_and_parse(url):
     table = tables[table_index]
     for row in table.find_all('tr'):
         cols = row.find_all('td')
-        if len(cols) >= 3:
-            rows.append([cols[2].text.strip().replace("/KRW",""), cols[-2].text.strip()])
-
+        if len(cols) >= 5:
+            ##['ARDR', '0.8561', '2,019,069.96', '3,803,650.48', '1,170,700,323', '9.64%']
+            rows.append([cols[2].text.strip().replace("/KRW",""), float(cols[3].text.strip().replace("¥","").replace(",", "")),float(cols[4].text.strip().replace("¥","").replace(",", "")),float(cols[5].text.strip().replace("¥","").replace(",", "")),float(cols[6].text.strip().replace("¥","").replace(",", "")),float(cols[7].text.strip().replace("¥","").replace("%", ""))])
+        #if len(cols) >= 3:
+        #    rows.append([cols[2].text.strip().replace("/KRW",""), cols[-2].text.strip()])
     return rows
 
 
@@ -54,6 +57,8 @@ def send_push_notification(title, text):
     return response.status_code == 200
 
 def compare_data(old_data, new_data):
+    if not old_data:
+        return True
     # 检查两个数据集之间是否有超过5%的变化
     change_count = 0
     for row in new_data:
@@ -72,14 +77,16 @@ def delete_oldest_csv():
         os.remove(files[0])
 
 url = "https://coinmarketcap.com/zh/exchanges/upbit/"
-last_rows = fetch_and_parse(url)
+last_rows =[]# fetch_and_parse(url)
 send_push_notification("begin to monitor",datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+futu_sqlite = FutuMysql.FutuMysql()
 while True:
     rows = fetch_and_parse(url)
 
     if compare_data(last_rows, rows):  # 检查是否有超过5%的变化
+        futu_sqlite.insert_coinmarketcap_data(str(rows[0][0]),str(rows[0][1]),str(rows[0][2]),str(rows[0][3]),str(rows[0][4]),str(rows[0][5]))
         send_push_notification(
-            rows[0][0] + " " + rows[0][1] + "|" + rows[1][0] + " " + rows[1][1] + "|" + rows[2][0] + " " + rows[2][1],
+            rows[0][0] + " %.2f"%rows[0][-1] + "|" + rows[1][0] + " %.2f"%rows[1][-1] + "|" + rows[2][0] + " %.2f"%rows[2][-1],
             str(rows[0:5]))
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         save_to_csv(f'table_{timestamp}.csv', rows)

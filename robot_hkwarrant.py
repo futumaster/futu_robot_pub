@@ -283,6 +283,7 @@ class CurKlineCallback(CurKlineHandlerBase):
 
                     notification.send_feishu("** " + log, "https://www.qq.com")
                     #os.system("say " + log)
+
                 self.is_stop = True
         else:
             self.call_dict.pop(subscribe_warrant["buy"]["stock"], None)
@@ -335,8 +336,7 @@ def looper(quote_ctx, focus):
     callback = CurKlineCallback(res, quote_ctx, cache_records)
     syscallback = SysNotifyTest()
     print("关注结果：", subscribe_stock(quote_ctx, re_focus, buy_warrents))
-    quote_ctx.set_handler(callback)  # 设置实时报价回调
-    quote_ctx.set_handler(syscallback)
+    quote_ctx.set_handlers([callback,syscallback])
 
     while True:
         time.sleep(20)
@@ -348,7 +348,9 @@ def looper(quote_ctx, focus):
                 continue
             print("反注册全部callback")
             os.system("say 反注册Callback")
+
             quote_ctx.unsubscribe_all()
+            #quote_ctx.set_handler(None)
             time.sleep(5)
             res,buy_warrents = get_subscribe_stock(quote_ctx, focus)
             re_focus = list(res.keys())
@@ -358,8 +360,7 @@ def looper(quote_ctx, focus):
             callback = CurKlineCallback(res, quote_ctx, cache_records)
             #syscallback = SysNotifyTest()
             print("关注结果：", subscribe_stock(quote_ctx, re_focus, buy_warrents))
-            #quote_ctx.set_handler(callback)  # 设置实时报价回调
-            #quote_ctx.set_handler(syscallback)
+            quote_ctx.set_handlers([callback,syscallback])
 
 #time.sleep(11*60*60-40*60)
 quote_ctx = OpenQuoteContext(host='127.0.0.1', port=11111)

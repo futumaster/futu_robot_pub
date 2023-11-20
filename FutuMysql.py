@@ -15,6 +15,28 @@ class FutuMysql:
         values = self.cursor.fetchall()
         print(values)
 
+    def insert_coinmarketcap_data(self,stock,price,twopercentplus,twopercentdeplus,volumn,volumnpercent):
+        """
+        交易对
+        价格
+        +2% Depth
+        -2% Depth
+        交易量
+        交易量(%)"""
+        insert_sql = """
+        INSERT INTO ai_coinmarketcap (stock,price,twopercentplus,twopercentdeplus,volumn,volumnpercent) VALUES (
+          '%s',
+          '%s',
+          '%s',
+          '%s',
+          '%s',
+          %s
+        ); 
+        """%(stock,price,twopercentplus,twopercentdeplus,volumn,volumnpercent)
+        #print("insert_sql",insert_sql)
+        self.cursor.execute(insert_sql)
+        self.conn.commit()
+
     def insert_ai_data(self,stock,open,close,high,low,volumn,turnover,recover_price,recover_price_radio,recover_stock,street_rate,street_vol,type,is_buy,buy_price,buy_stock, order_vol_percent, order_vol):
         insert_sql = """
         INSERT INTO ai_history (TIME_DAY,STOCK,OPEN_PRICE,CLOSE_PRICE,HIGH,LOW,VOLUMN,TURNOVER,RECOVER_PRICE,RECOVER_PRICE_RADIO,RECOVER_STOCK,STREET_RATE,STREET_VOL,TYPE,IS_BUY,BUY_PRICE,BUY_STOCK,ORDER_VOL_PERCENT,ORDER_VOL) VALUES (
@@ -50,6 +72,7 @@ class FutuMysql:
 if __name__ == '__main__':
     """测试代码"""
     futu = FutuMysql()
-    futu.select_ai_data()
+
+    #futu.select_ai_data()
     #futu.insert_ai_data()
     futu.close()

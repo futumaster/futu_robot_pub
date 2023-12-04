@@ -6,7 +6,7 @@ import csv
 import time,json
 import datetime,glob,os
 import FutuMysql
-
+MAX_HISTORY_LENGTH = 3000
 
 def fetch_and_parse(url):
     # 请求网页
@@ -76,19 +76,93 @@ def delete_oldest_csv():
         files.sort(key=os.path.getmtime)
         os.remove(files[0])
 
+def initialize_stock(stock, volumnpercent):
+    return {
+        'data': [],
+        'volumnpercent_increase_count': 0,
+        'twopercent_difference_negative_count': 0,
+        'volumnpercent_decrease_count': 0,
+        'twopercent_difference_positive_count': 0,
+        'prev_volumnpercent': volumnpercent,
+        'acc_positive': False,
+        'acc_negative': False
+    }
+
+def process_row(stock_history, row):
+    try:
+        stock, price, twopercentplus, twopercentdeplus, volumn, volumnpercent = row
+        twopercentplus, twopercentdeplus, volumn, volumnpercent = map(float, [twopercentplus, twopercentdeplus, volumn, volumnpercent])
+    except ValueError:
+        print("Invalid row data:", row)
+        return
+    except TypeError:
+        print("Row does not contain six elements:", row)
+        return
+
+    if stock not in stock_history and volumnpercent > 0.5:
+        stock_history[stock] = initialize_stock(stock, volumnpercent)
+
+    if stock in stock_history:
+        stock_history[stock]['data'].append(row)
+        if len(stock_history[stock]['data']) > 30:
+            del stock_history[stock]['data'][:10]
+        update_counts(stock_history[stock], twopercentplus, twopercentdeplus, volumnpercent)
+        check_opportunities(stock_history[stock], stock)
+
+def update_counts(stock_info, twopercentplus, twopercentdeplus, volumnpercent):
+    if volumnpercent > stock_info['prev_volumnpercent']:
+        stock_info['volumnpercent_increase_count'] += 1
+        stock_info['volumnpercent_decrease_count'] = 0
+    elif volumnpercent < stock_info['prev_volumnpercent']:
+        stock_info['volumnpercent_increase_count'] = 0
+        stock_info['volumnpercent_decrease_count'] += 1
+    stock_info['prev_volumnpercent'] = volumnpercent
+
+    if twopercentdeplus - twopercentplus < -10000:
+        if stock_info['twopercent_difference_positive_count'] > 9:
+            stock_info["acc_positive"] = True
+            stock_info["acc_negative"] = False
+        stock_info['twopercent_difference_negative_count'] += 1
+        stock_info['twopercent_difference_positive_count'] = 0
+
+    elif twopercentdeplus - twopercentplus > 0:
+        if stock_info['twopercent_difference_negative_count'] > 9:
+            stock_info["acc_positive"] = False
+            stock_info["acc_negative"] = True
+        stock_info['twopercent_difference_negative_count'] = 0
+        stock_info['twopercent_difference_positive_count'] += 1
+
+def check_opportunities(stock_info, stock):
+    print(stock_info)
+    if stock_info['volumnpercent_increase_count'] >= 3 and stock_info['twopercent_difference_negative_count'] >= 2 and stock_info["acc_positive"]:
+        print("发现做多机会")
+        print("股票: ", stock + ','.join(map(str, [data[1] for data in stock_info['data'][-2:]])))
+        send_push_notification("做多:"+stock, "最近三次volumnpercent:" + ', '.join(map(str, [data[5] for data in stock_info['data'][-3:]])) +
+                       " 最近三次deep: " + ', '.join(map(str, [data[3] - data[2] for data in stock_info['data'][-3:]])))
+
+    if stock_info['volumnpercent_decrease_count'] >= 3 and stock_info['twopercent_difference_positive_count'] >= 3 and stock_info["acc_negative"]:
+        print("发现做空机会")
+        print("股票: ", stock + ','.join(map(str, [data[1] for data in stock_info['data'][-2:]])))
+        send_push_notification("做空:" + stock, "最近三次volumnpercent:" + ', '.join(map(str, [data[5] for data in stock_info['data'][-3:]])) +
+                       " 最近三次deep: " + ', '.join(map(str, [data[3] - data[2] for data in stock_info['data'][-3:]])))
+
 url = "https://coinmarketcap.com/zh/exchanges/upbit/"
 last_rows =[]# fetch_and_parse(url)
 send_push_notification("begin to monitor",datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
 futu_sqlite = FutuMysql.FutuMysql()
+stock_history = {}
 while True:
     rows = fetch_and_parse(url)
 
     if compare_data(last_rows, rows):  # 检查是否有超过5%的变化
         for row in rows:
             futu_sqlite.insert_coinmarketcap_data(str(row[0]),str(row[1]),str(row[2]),str(row[3]),str(row[4]),str(row[5]))
+            process_row(stock_history, row)
+
         send_push_notification(
             rows[0][0] + " %.2f"%rows[0][-1] + "|" + rows[1][0] + " %.2f"%rows[1][-1] + "|" + rows[2][0] + " %.2f"%rows[2][-1],
             str(rows[0:5]))
+
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         save_to_csv(f'table_{timestamp}.csv', rows)
         delete_oldest_csv()

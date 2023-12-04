@@ -53,8 +53,18 @@ def send_push_notification(title, text):
         'uids': uids
     }
     headers = {'Content-type': 'application/json'}
-    response = requests.post(url, data=json.dumps(data), headers=headers)
-    return response.status_code == 200
+    try:
+        response = requests.post(url, data=json.dumps(data), headers=headers)
+        return response.status_code == 200
+    except:
+        print("error post and sleep 60s")
+        time.sleep(60)
+        try:
+            response = requests.post(url, data=json.dumps(data), headers=headers)
+            return response.status_code == 200
+        except:
+            print("error post")
+            return 0
 
 def compare_data(old_data, new_data):
     if not old_data:

@@ -94,6 +94,7 @@ def initialize_stock(stock, volumnpercent):
         'volumnpercent_decrease_count': 0,
         'twopercent_difference_positive_count': 0,
         'prev_volumnpercent': volumnpercent,
+        'eq_volumn':0,
         'acc_positive': False,
         'acc_negative': False
     }
@@ -123,9 +124,16 @@ def update_counts(stock_info, twopercentplus, twopercentdeplus, volumnpercent):
     if volumnpercent > stock_info['prev_volumnpercent']:
         stock_info['volumnpercent_increase_count'] += 1
         stock_info['volumnpercent_decrease_count'] = 0
+        stock_info['eq_volumn'] = 0
     elif volumnpercent < stock_info['prev_volumnpercent']:
         stock_info['volumnpercent_increase_count'] = 0
         stock_info['volumnpercent_decrease_count'] += 1
+        stock_info['eq_volumn'] = 0
+    else:
+        stock_info['eq_volumn'] += 1
+        if stock_info['eq_volumn'] > 3:
+            stock_info['volumnpercent_decrease_count'] = 0
+            stock_info['volumnpercent_increase_count'] = 0
     stock_info['prev_volumnpercent'] = volumnpercent
 
     if twopercentdeplus - twopercentplus < -10000:
@@ -149,13 +157,13 @@ def update_counts(stock_info, twopercentplus, twopercentdeplus, volumnpercent):
 def check_opportunities(stock_info, stock):
     print(stock_info)
     if stock_info['volumnpercent_increase_count'] >= 3 and stock_info['twopercent_difference_negative_count'] >= 2 and stock_info["acc_positive"]:
-        print("发现做多机会")
+        print(datetime.datetime.now().strftime("%Y%m%d%H%M%S"),"发现做多机会",stock_info)
         print("股票: ", stock + ','.join(map(str, [data[1] for data in stock_info['data'][-2:]])))
         send_push_notification("做多:"+stock, "最近三次volumnpercent:" + ', '.join(map(str, [data[5] for data in stock_info['data'][-3:]])) +
                        " 最近三次deep: " + ', '.join(map(str, [data[3] - data[2] for data in stock_info['data'][-3:]])))
 
     if stock_info['volumnpercent_decrease_count'] >= 3 and stock_info['twopercent_difference_positive_count'] >= 3 and stock_info["acc_negative"]:
-        print("发现做空机会")
+        print(datetime.datetime.now().strftime("%Y%m%d%H%M%S"),"发现做空机会",stock_info)
         print("股票: ", stock + ','.join(map(str, [data[1] for data in stock_info['data'][-2:]])))
         send_push_notification("做空:" + stock, "最近三次volumnpercent:" + ', '.join(map(str, [data[5] for data in stock_info['data'][-3:]])) +
                        " 最近三次deep: " + ', '.join(map(str, [data[3] - data[2] for data in stock_info['data'][-3:]])))

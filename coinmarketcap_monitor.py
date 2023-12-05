@@ -129,6 +129,8 @@ def update_counts(stock_info, twopercentplus, twopercentdeplus, volumnpercent):
     stock_info['prev_volumnpercent'] = volumnpercent
 
     if twopercentdeplus - twopercentplus < -10000:
+        if stock_info["acc_negative"]:
+            stock_info["acc_negative"] = False
         if stock_info['twopercent_difference_positive_count'] > 9:
             stock_info["acc_positive"] = True
             stock_info["acc_negative"] = False
@@ -136,6 +138,8 @@ def update_counts(stock_info, twopercentplus, twopercentdeplus, volumnpercent):
         stock_info['twopercent_difference_positive_count'] = 0
 
     elif twopercentdeplus - twopercentplus > 0:
+        if stock_info["acc_positive"]:
+            stock_info["acc_positive"] = False
         if stock_info['twopercent_difference_negative_count'] > 9:
             stock_info["acc_positive"] = False
             stock_info["acc_negative"] = True
@@ -169,9 +173,9 @@ while True:
             futu_sqlite.insert_coinmarketcap_data(str(row[0]),str(row[1]),str(row[2]),str(row[3]),str(row[4]),str(row[5]))
             process_row(stock_history, row)
 
-        send_push_notification(
-            rows[0][0] + " %.2f"%rows[0][-1] + "|" + rows[1][0] + " %.2f"%rows[1][-1] + "|" + rows[2][0] + " %.2f"%rows[2][-1],
-            str(rows[0:5]))
+        #send_push_notification(
+        #    rows[0][0] + " %.2f"%rows[0][-1] + "|" + rows[1][0] + " %.2f"%rows[1][-1] + "|" + rows[2][0] + " %.2f"%rows[2][-1],
+        #    str(rows[0:5]))
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         save_to_csv(f'table_{timestamp}.csv', rows)

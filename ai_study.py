@@ -6,6 +6,7 @@ from sklearn.metrics import accuracy_score
 import pymysql
 import os
 import datetime
+import joblib
 
 # 数据库配置
 DB_HOST = 'hk-cynosdbmysql-grp-ryjhhk5b.sql.tencentcdb.com'
@@ -58,15 +59,17 @@ df_continuous = df[df['time_diff'] <= 20]
 df_continuous['twopercent_diff'] = df_continuous['twopercentdeplus'] - df_continuous['twopercentplus']
 
 # 生成时序特征
-for lag in range(1, 21):
+for lag in range(1, 200):
     df_continuous[f'price_lag_{lag}'] = df_continuous.groupby('stock')['price'].shift(lag)
+    df_continuous[f'twopercent_diff_lag_{lag}'] = df_continuous.groupby('stock')['twopercent_diff'].shift(lag)
+    df_continuous[f'volumnpercent_lag_{lag}'] = df_continuous.groupby('stock')['volumnpercent'].shift(lag)
     # 你可以添加更多的时序特征...
 
 # 去除含有NaN的行
 df_continuous.dropna(inplace=True)
 
 # 定义目标变量，这里简化为未来1小时价格上涨（1）或下跌（0）
-df_continuous['target'] = np.where(df_continuous['price'].shift(-1) > df_continuous['price'], 1, 0)
+df_continuous['target'] = np.where(df_continuous['price'].shift(-3) > df_continuous['price'], 1, 0)
 
 # 拆分数据为训练集和测试集
 X = df_continuous.drop(['date', 'stock', 'target'], axis=1)
@@ -76,11 +79,11 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 # 模型训练与参数优化
 clf = RandomForestClassifier()
 param_grid = {
-    'n_estimators': [50, 100, 200],
-    'max_depth': [10, 50, 100]
+    'n_estimators': [100,],
+    'max_depth': [50,]
 }
 
-grid_search = GridSearchCV(clf, param_grid, cv=3)
+grid_search = GridSearchCV(clf, param_grid, cv=2)
 grid_search.fit(X_train, y_train)
 
 # 保存训练好的模型

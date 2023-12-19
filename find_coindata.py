@@ -1,54 +1,49 @@
 import pandas as pd
-from datetime import timedelta
 
-# 假设你的CSV文件名为data.csv，并且包含'stock', 'date', 'price'三列。
-# 'date'列的格式应该能被pandas的to_datetime函数正确解析。
-data = pd.read_csv('cache.csv')
-data['date'] = pd.to_datetime(data['date'])
+# 假设你的CSV文件名为data.csv，并且包含'stock', 'date', 'price', 'twopercentdeplus', 'twopercentplus'等列。
+data = pd.read_csv('cache.csv', parse_dates=['date'])
+
+# 确保数据按照股票和日期排序
 data.sort_values(by=['stock', 'date'], inplace=True)
 
-# 初始化字典用于跟踪每个股票的信息
-rising_dict = {}
+# 避免在循环中操作 DataFrame
+data.set_index('date', inplace=True)
 
-# 遍历每个股票
-for stock in data['stock'].unique():
-    stock_data = data[data['stock'] == stock]
-    # 初始化时间窗口的起始索引和结束索引
-    start_index = 0
-    end_index = 0
+# 计算'twopercentdeplus'和'twopercentplus'的差值并直接添加为新列
+data['difference'] = data['twopercentdeplus'] - data['twopercentplus']
 
-    # 不断移动时间窗口直到结束索引达到数据的末尾
-    while end_index < len(stock_data):
-        # 设置时间窗口的长度为1小时
-        start_time = stock_data.iloc[start_index]['date']
-        end_time = start_time + timedelta(hours=1)
+# 初始化用于存储结果的列表
+rising_data = []
 
-        # 找到在这个时间窗口内的所有数据
-        while end_index < len(stock_data) and stock_data.iloc[end_index]['date'] <= end_time:
-            end_index += 1
+# 使用groupby优化，一次性计算每只股票
+for stock, stock_data in data.groupby('stock'):
 
-        # 计算在这个时间窗口内的价格上涨次数
-        window_data = stock_data.iloc[start_index:end_index]
-        rises = sum(window_data['price'].diff().fillna(0) > 0)
+    # 计算价格上涨百分比，这里使用了shift来对齐数据
+    stock_data['price_increase_percent'] = stock_data['price'].pct_change(periods=-1) * -100
 
-        # 确保时间窗口内80%的时间点价格是上涨的
-        if rises >= round(0.8 * len(window_data)):
-            # 计算整体价格上涨百分比
-            price_increase_percent = ((window_data.iloc[-1]['price'] - window_data.iloc[0]['price']) / window_data.iloc[0]['price']) * 100
-            # 如果价格上涨超过8%，将这个时间段记录到字典中
-            if price_increase_percent >= 8:
-                if stock not in rising_dict:
-                    rising_dict[stock] = []
-                rising_dict[stock].append({
-                    'start_time': start_time,
-                    'end_time': window_data.iloc[-1]['date'],
-                    'price_increase_percent': price_increase_percent
-                })
+    # 筛选出价格上涨超过8%的数据
+    high_increase = stock_data[stock_data['price_increase_percent'] >= 8]
 
-        # 移动时间窗口的起始索引
-        start_index += 1
+    # 通过rolling和sum计算正差值的比率
+    windowed_data = stock_data.rolling('2h').agg({
+        'difference': lambda x: (x > 0).sum() / len(x) if len(x) > 0 else 0
+    }).rename(columns={'difference': 'positive_difference_ratio'})
+
+    # 合并高增长数据和窗口统计数据
+    merged_data = high_increase.join(windowed_data, how='left')
+
+    # 记录每只股票的相关数据
+    for date, row in merged_data.iterrows():
+        rising_data.append({
+            'stock': stock,
+            'start_time': date,
+            'end_time': date + pd.Timedelta(hours=1),
+            'price_increase_percent': row['price_increase_percent'],
+            'positive_difference_ratio': row['positive_difference_ratio']
+        })
+
+# 将结果转换为DataFrame
+rising_df = pd.DataFrame(rising_data)
 
 # 打印结果
-for stock, periods in rising_dict.items():
-    for period in periods:
-        print(f"Stock: {stock}, Start: {period['start_time']}, End: {period['end_time']}, Price Increase: {period['price_increase_percent']:.2f}%")
+print(rising_df)
